@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { FontLoader, TextGeometry } from "addons";
 
-// Scene setup
+// Initialize Scene
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
     75,
@@ -33,62 +33,156 @@ groundBody.addShape(new CANNON.Plane());
 groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
-// Create player cube (body)
-const playerGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-const playerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-const player = new THREE.Mesh(playerGeometry, playerMaterial);
-scene.add(player);
+// Projectile Class
+class Projectile {
+    constructor(position, direction, speed, lifetime) {
+        this.geometry = new THREE.SphereGeometry(0.1, 16, 16); // Sphere shape
+        this.material = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Yellow color
+        this.mesh = new THREE.Mesh(this.geometry, this.material);
+        this.mesh.position.copy(position); // Start position
 
-// Create a physics body for the player
-const playerBody = new CANNON.Body({
-    mass: 1,
-    linearDamping: 0.9,
-    angularDamping: 0.9,
-});
-playerBody.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25)));
-playerBody.position.set(0, 2.5, 0);
-world.addBody(playerBody);
+        this.direction = direction.clone().normalize(); // Direction vector
+        this.speed = speed; // Speed of the projectile
+        this.lifetime = lifetime; // Lifetime of the projectile
 
-// Create feet
-const footGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-const footMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+        this.startTime = Date.now(); // Track the time when created
+    }
 
-const leftFoot = new THREE.Mesh(footGeometry, footMaterial);
-leftFoot.position.set(-0.3, 2, 0);
-scene.add(leftFoot);
+    update() {
+        const elapsedTime = Date.now() - this.startTime;
+        if (elapsedTime > this.lifetime) {
+            this.dispose(); // Remove the projectile if its lifetime is exceeded
+            return;
+        }
+        // Move the projectile in the direction it was fired
+        this.mesh.position.add(this.direction.clone().multiplyScalar(this.speed));
+    }
 
-const rightFoot = new THREE.Mesh(footGeometry, footMaterial);
-rightFoot.position.set(0.3, 2, 0);
-scene.add(rightFoot);
+    dispose() {
+        // Clean up the projectile
+        scene.remove(this.mesh);
+        this.geometry.dispose();
+        this.material.dispose();
+    }
+}
 
-// Create physics bodies for feet
-const leftFootBody = new CANNON.Body({
-    mass: 1,
-    linearDamping: 0.9,
-    angularDamping: 0.9,
-});
-leftFootBody.addShape(new CANNON.Box(new CANNON.Vec3(0.1, 0.1, 0.1)));
-leftFootBody.position.set(-0.3, 2, 0);
-world.addBody(leftFootBody);
+// Player Class
+class Player {
+    constructor(scene, world) {
+        // Initialize properties
+        this.health = 100; // Starting health
+        this.maxHealth = 100; // Maximum health
+        this.projectiles = []; // Array to hold projectiles
+        this.speed = 5; // Speed of the player
+        this.scene = scene; // Access to the scene
+        this.world = world; // Access to the physics world
 
-const rightFootBody = new CANNON.Body({
-    mass: 1,
-    linearDamping: 0.9,
-    angularDamping: 0.9,
-});
-rightFootBody.addShape(new CANNON.Box(new CANNON.Vec3(0.1, 0.1, 0.1)));
-rightFootBody.position.set(0.3, 2, 0);
-world.addBody(rightFootBody);
+        // Create player geometry and material
+        this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        this.mesh = new THREE.Mesh(this.geometry, this.material);
+        this.scene.add(this.mesh);
 
+        // Create Cannon.js physics body for the player
+        this.body = new CANNON.Body({
+            mass: 1,
+            linearDamping: 0.9,
+            angularDamping: 1,
+        });
+        this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25)));
+        this.body.position.set(0, 2.5, 0);
+        this.world.addBody(this.body);
+    }
+
+    // Method to shoot projectiles
+    shoot() {
+        const direction = new THREE.Vector3(0, 0, -1);
+        direction.applyQuaternion(this.mesh.quaternion); // Apply player's rotation
+
+        const newProjectile = new Projectile(this.mesh.position.clone(), direction, PROJECTILE_SPEED, PROJECTILE_LIFETIME);
+        this.projectiles.push(newProjectile);
+        this.scene.add(newProjectile.mesh); // Add the projectile to the scene
+    }
+
+    // Update method to handle player movement and projectiles
+    update(keys) {
+        // Sync Three.js object with physics body
+        this.mesh.position.copy(this.body.position);
+        this.mesh.quaternion.copy(this.body.quaternion);
+
+        // Handle inputs for movement
+        const targetVelocity = new CANNON.Vec3(0, 0, 0);
+        if (keys["ArrowUp"]) {
+            targetVelocity.z = -this.speed; // Move forward
+        }
+        if (keys["ArrowDown"]) {
+            targetVelocity.z = this.speed; // Move backward
+        }
+        if (keys["ArrowLeft"]) {
+            targetVelocity.x = -this.speed; // Move left
+        }
+        if (keys["ArrowRight"]) {
+            targetVelocity.x = this.speed; // Move right
+        }
+
+        // Calculate direction based on input
+        if (targetVelocity.x !== 0 || targetVelocity.z !== 0) {
+            const direction = new THREE.Vector3(targetVelocity.x, 0, targetVelocity.z).normalize();
+            this.mesh.lookAt(this.mesh.position.clone().add(direction));
+        }
+
+        // Set the player's linear velocity
+        this.body.velocity.x = targetVelocity.x;
+        this.body.velocity.z = targetVelocity.z;
+
+        // Update projectiles
+        this.projectiles.forEach((projectile) => {
+            projectile.update();
+        });
+
+        // Clean up expired projectiles
+        this.projectiles = this.projectiles.filter(projectile => projectile.mesh.position.distanceTo(this.mesh.position) < 1000);
+
+        // Update health bar (assuming updateHealthBar is defined in the global scope)
+        this.updateHealthBar();
+    }
+
+    // Health Management
+    takeDamage(amount) {
+        this.health -= amount;
+        if (this.health < 0) this.health = 0;
+        console.log(`Player Health: ${this.health}`);
+        this.updateHealthBar();
+        if (this.health === 0) {
+            console.log("Player is dead!");
+            // Handle death (e.g., restart, show game over, etc.)
+        }
+    }
+
+    // Update the health bar in the DOM
+    updateHealthBar() {
+        const healthBarElement = document.getElementById("health-bar");
+        const healthPercentage = (this.health / this.maxHealth) * 100; // Calculate current health percentage
+        healthBarElement.style.width = healthPercentage + "%"; // Update width of the health bar
+        healthBarElement.style.background = healthPercentage < 30 ? "red" : "green"; // Change color if health is low
+    }
+}
+
+// Initialize the player
+const player = new Player(scene, world);
+
+// Setup for projectiles
+let playerProjectiles = [];
+const PROJECTILE_SPEED = 2; // Speed of the projectile
+const PROJECTILE_LIFETIME = 3000; // Lifetime of the projectile in milliseconds
 
 // Variables to track collected items
 let collectedCubes = 0;
-let totalCubes = 5
+let totalCubes = 5;
 const cubesToRemove = [];
 
 // Function to create random platforms and collectable cubes
 function createPlatforms(numPlatforms) {
-
     for (let i = 0; i < numPlatforms; i++) {
         // ****************** platform stuff ********************
         const platformWidth = 1;
@@ -130,8 +224,8 @@ function createPlatforms(numPlatforms) {
         );
         platformBody.position.copy(platform.position);
         world.addBody(platformBody);
-        // ****************** END platform stuff begin cube stuff ********************
 
+        // Create collectable cubes
         const cubeSize = 0.3;
         const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
         const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
@@ -158,10 +252,9 @@ function createPlatforms(numPlatforms) {
 
         cubeBody.userData = { isCollectible: true, mesh: cube };
 
-        // handle cube collision with player
+        // Handle cube collision with player
         cubeBody.addEventListener("collide", async (event) => {
-            if (event.body === playerBody && cubeBody.userData.isCollectible) {
-
+            if (event.body === player.body && cubeBody.userData.isCollectible) {
                 cubeBody.userData.isCollectible = false;
                 cubesToRemove.push(cubeBody);
                 cube.geometry.dispose();
@@ -170,30 +263,24 @@ function createPlatforms(numPlatforms) {
                 collectedCubes++;
                 console.log(`Collected cubes: ${collectedCubes}`);
 
-
                 if (collectedCubes === totalCubes) {
-                    totalCubes = 5
+                    totalCubes = 5;
                     removeAllPlatforms(); // Trigger platform removal
                     createPlatforms(totalCubes);
                     collectedCubes = 0;
                 }
             }
         });
-
     }
-
 }
 
-// Optimize the removal of all platforms from the game
 function removeAllPlatforms() {
     // Remove all existing platforms and cubes, preserving the ground, player, and feet
     const objectsToRemove = scene.children.filter((object) => {
         return (
             object instanceof THREE.Mesh &&
             object !== ground &&
-            object !== leftFoot &&
-            object !== rightFoot &&
-            object !== player
+            object !== player.mesh
         );
     });
 
@@ -217,82 +304,23 @@ function removeAllPlatforms() {
     cubesToRemove.length = 0;
 }
 
-class Projectile {
-    constructor(position, direction, speed, lifetime) {
-        this.geometry = new THREE.SphereGeometry(0.1, 16, 16); // Sphere shape
-        this.material = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Yellow color
-        this.mesh = new THREE.Mesh(this.geometry, this.material);
-        this.mesh.position.copy(position); // Start position
-
-        this.direction = direction.clone().normalize(); // Direction vector
-        this.speed = speed; // Speed of the projectile
-        this.lifetime = lifetime; // Lifetime of the projectile
-
-        this.startTime = Date.now(); // Track the time when created
-    }
-
-    update() {
-        const elapsedTime = Date.now() - this.startTime;
-        if (elapsedTime > this.lifetime) {
-            this.dispose(); // Remove the projectile if its lifetime is exceeded
-            return;
-        }
-        // Move the projectile in the direction it was fired
-        this.mesh.position.add(this.direction.clone().multiplyScalar(this.speed));
-    }
-
-    dispose() {
-        // Clean up the projectile
-        scene.remove(this.mesh);
-        this.geometry.dispose();
-        this.material.dispose();
-    }
-}
-
-let playerHealth = 100; // Starting health for the player
-const maxPlayerHealth = 100; // Maximum health for normalizing the health bar
-
-function updateHealthBar() {
-    const healthBarElement = document.getElementById("health-bar");
-    const healthPercentage = (playerHealth / maxPlayerHealth) * 100; // Calculate current health percentage
-    healthBarElement.style.width = healthPercentage + "%"; // Update width of the health bar
-    healthBarElement.style.background = healthPercentage < 30 ? "red" : "green"; // Change color if health is low
-}
-updateHealthBar();
-
-let playerProjectiles = [];
-const PROJECTILE_SPEED = 2; // Speed of the projectile
-const PROJECTILE_LIFETIME = 3000; // Lifetime of the projectile in milliseconds
-
-function shootProjectile() {
-    // Create a projectile in front of the player
-    const direction = new THREE.Vector3(0, 0, -1);
-    direction.applyQuaternion(player.quaternion); // Apply player's rotation
-
-    const newProjectile = new Projectile(player.position.clone(), direction, PROJECTILE_SPEED, PROJECTILE_LIFETIME);
-    playerProjectiles.push(newProjectile);
-    scene.add(newProjectile.mesh); // Add the projectile to the scene
-}
-
 // Create 5 random platforms
 createPlatforms(totalCubes);
 
 // Camera positioning
 camera.position.set(0, 2, 5);
-camera.lookAt(player.position);
+camera.lookAt(player.mesh.position);
 
 // Event listener for keyboard controls
 const keys = {};
 let isGrounded = false;
 
 // Player collision detection
-playerBody.addEventListener("collide", (event) => {
-    // Check if the collided object is the ground or a platform
+player.body.addEventListener("collide", (event) => {
     if (event.body === groundBody || (event.body.userData && event.body.userData.isPlatform)) {
         isGrounded = true; // Player is grounded when colliding with platforms or ground
     }
 });
-
 
 // Control logic
 window.addEventListener("keydown", (e) => {
@@ -300,14 +328,13 @@ window.addEventListener("keydown", (e) => {
 
     // Jump when the spacebar is pressed
     if (e.code === "Space" && isGrounded) {
-        playerBody.velocity.y = 8; // Apply an upward force for jump
+        player.body.velocity.y = 8; // Apply an upward force for jump
         isGrounded = false;
     }
 
-    if (e.code === "Enter") {
-        shootProjectile(); // Call the function to shoot when Enter is pressed
+    if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
+        player.shoot(); // Call the function to shoot when Enter is pressed
     }
-
 });
 
 window.addEventListener("keyup", (e) => {
@@ -331,76 +358,12 @@ function animate() {
         world.remove(bodyToRemove); // Remove from physics world
     }
 
-    // Sync Three.js objects with Cannon.js bodies
-    player.position.copy(playerBody.position);
-    player.quaternion.copy(playerBody.quaternion);
+    // Update player and camera
+    player.update(keys);
 
-    // Update projectiles
-    playerProjectiles.forEach((projectile) => {
-        projectile.update();
-    });
-
-    // Remove expired projectiles
-    playerProjectiles = playerProjectiles.filter(projectile => projectile.mesh.position.distanceTo(player.position) < 1000); // Limit distance to keep track
-
-
-    // Sync feet positions with the player
-    leftFoot.position.set(
-        player.position.x - 0.3,
-        player.position.y,
-        player.position.z
-    );
-    rightFoot.position.set(
-        player.position.x + 0.3,
-        player.position.y,
-        player.position.z
-    );
-
-    // Basic animation: "bouncing" effect on movement
-    const scaleFactor = 0.1; // Adjust this value for bounce strength
-    if (
-        keys["ArrowUp"] ||
-        keys["ArrowDown"] ||
-        keys["ArrowLeft"] ||
-        keys["ArrowRight"]
-    ) {
-        player.scale.y = 1 + Math.sin(Date.now() * 0.005) * scaleFactor; // Bounce while moving
-    } else {
-        player.scale.y = 1; // Reset scale when not moving
-    }
-
-    // Calculate camera position and rotation
-    camera.position.copy(player.position).add(cameraOffset);
-    camera.lookAt(player.position.clone().add(cameraLookAtOffset));
-
-    // Set the linear velocity directly to control player movement
-    const targetVelocity = new CANNON.Vec3(0, 0, 0);
-    if (keys["ArrowUp"]) {
-        targetVelocity.z = -5; // Move forward
-    }
-    if (keys["ArrowDown"]) {
-        targetVelocity.z = 5; // Move backward
-    }
-    if (keys["ArrowLeft"]) {
-        targetVelocity.x = -5; // Move left
-    }
-    if (keys["ArrowRight"]) {
-        targetVelocity.x = 5; // Move right
-    }
-
-    // Calculate direction
-    if (targetVelocity.x !== 0 || targetVelocity.z !== 0) {
-        const direction = new THREE.Vector3(targetVelocity.x, 0, targetVelocity.z).normalize();
-        player.lookAt(player.position.clone().add(direction)); // Make the player face the direction of movement
-    }
-
-    // Set the player's linear velocity
-    playerBody.velocity.x = targetVelocity.x;
-    playerBody.velocity.z = targetVelocity.z;
-
-    // Disable rotation
-    playerBody.angularVelocity.set(0, 0, 0);
-    playerBody.quaternion.set(0, 0, 0, 1); // Keep the player upright
+    // Update camera position and look at
+    camera.position.copy(player.mesh.position).add(cameraOffset);
+    camera.lookAt(player.mesh.position.clone().add(cameraLookAtOffset));
 
     // Render the scene
     renderer.render(scene, camera);
