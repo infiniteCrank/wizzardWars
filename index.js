@@ -178,6 +178,7 @@ class Enemy {
         this.world = world;
         this.player = player;
         this.health = 100; // Same as player's starting health
+        this.maxHealth = 100;
         this.projectiles = [];
         this.speed = 3;
         this.shootCooldown = 2000;
@@ -213,6 +214,9 @@ class Enemy {
         // For handling jump attempts on a given target cube.
         this.currentTarget = null;
         this.jumpAttemptsForTarget = 0;
+
+        // Update the enemy health bar at the start.
+        this.updateHealthBar();
     }
 
     // Add a takeDamage method similar to the player's.
@@ -220,8 +224,22 @@ class Enemy {
         this.health -= amount;
         if (this.health < 0) this.health = 0;
         console.log(`Enemy Health: ${this.health}`);
+        this.updateHealthBar();
         if (this.health === 0) {
             console.log("Enemy is dead!");
+        }
+    }
+
+    // Update the enemy health bar in the DOM.
+    updateHealthBar() {
+        const enemyHealthBar = document.getElementById("enemy-health-bar");
+        if (enemyHealthBar) {
+            const healthPercentage = (this.health / this.maxHealth) * 100;
+            enemyHealthBar.style.width = healthPercentage + "%";
+            enemyHealthBar.style.background = healthPercentage < 30 ? "red" : "green";
+            console.log(`Enemy health bar updated to ${healthPercentage}%`);
+        } else {
+            console.log("Enemy health bar element not found.");
         }
     }
 
