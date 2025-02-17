@@ -139,7 +139,7 @@ function createPlatforms(numPlatforms) {
 
         cube.position.set(
             platform.position.x,
-            platform.position.y + platformHeight / 2 + cubeSize / 2,
+            platform.position.y + .5,
             platform.position.z
         );
 
@@ -217,6 +217,53 @@ function removeAllPlatforms() {
     cubesToRemove.length = 0;
 }
 
+class Projectile {
+    constructor(position, direction, speed, lifetime) {
+        this.geometry = new THREE.SphereGeometry(0.1, 16, 16); // Sphere shape
+        this.material = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Yellow color
+        this.mesh = new THREE.Mesh(this.geometry, this.material);
+        this.mesh.position.copy(position); // Start position
+
+        this.direction = direction.clone().normalize(); // Direction vector
+        this.speed = speed; // Speed of the projectile
+        this.lifetime = lifetime; // Lifetime of the projectile
+
+        this.startTime = Date.now(); // Track the time when created
+    }
+
+    update() {
+        const elapsedTime = Date.now() - this.startTime;
+        if (elapsedTime > this.lifetime) {
+            this.dispose(); // Remove the projectile if its lifetime is exceeded
+            return;
+        }
+        // Move the projectile in the direction it was fired
+        this.mesh.position.add(this.direction.clone().multiplyScalar(this.speed));
+    }
+
+    dispose() {
+        // Clean up the projectile
+        scene.remove(this.mesh);
+        this.geometry.dispose();
+        this.material.dispose();
+    }
+}
+
+
+let playerProjectiles = [];
+const PROJECTILE_SPEED = 2; // Speed of the projectile
+const PROJECTILE_LIFETIME = 3000; // Lifetime of the projectile in milliseconds
+
+function shootProjectile() {
+    // Create a projectile in front of the player
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyQuaternion(player.quaternion); // Apply player's rotation
+
+    const newProjectile = new Projectile(player.position.clone(), direction, PROJECTILE_SPEED, PROJECTILE_LIFETIME);
+    playerProjectiles.push(newProjectile);
+    scene.add(newProjectile.mesh); // Add the projectile to the scene
+}
+
 // Create 5 random platforms
 createPlatforms(totalCubes);
 
@@ -233,7 +280,6 @@ playerBody.addEventListener("collide", (event) => {
     // Check if the collided object is the ground or a platform
     if (event.body === groundBody || (event.body.userData && event.body.userData.isPlatform)) {
         isGrounded = true; // Player is grounded when colliding with platforms or ground
-        console.log(isGrounded)
     }
 });
 
@@ -244,10 +290,14 @@ window.addEventListener("keydown", (e) => {
 
     // Jump when the spacebar is pressed
     if (e.code === "Space" && isGrounded) {
-        playerBody.velocity.y = 5; // Apply an upward force for jump
+        playerBody.velocity.y = 8; // Apply an upward force for jump
         isGrounded = false;
-        console.log(isGrounded)
     }
+
+    if (e.code === "Enter") {
+        shootProjectile(); // Call the function to shoot when Enter is pressed
+    }
+
 });
 
 window.addEventListener("keyup", (e) => {
@@ -274,6 +324,15 @@ function animate() {
     // Sync Three.js objects with Cannon.js bodies
     player.position.copy(playerBody.position);
     player.quaternion.copy(playerBody.quaternion);
+
+    // Update projectiles
+    playerProjectiles.forEach((projectile) => {
+        projectile.update();
+    });
+
+    // Remove expired projectiles
+    playerProjectiles = playerProjectiles.filter(projectile => projectile.mesh.position.distanceTo(player.position) < 1000); // Limit distance to keep track
+
 
     // Sync feet positions with the player
     leftFoot.position.set(
