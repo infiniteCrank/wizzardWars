@@ -1,0 +1,27 @@
+{
+  "name": "wizzardwars",
+  "version": "1.0.0",
+  "description": "a wizzard game based on noxx",
+  "keywords": [
+    "wizzard"
+  ],
+  "homepage": "https://github.com/infiniteCrank/wizzardWars#readme",
+  "bugs": {
+    "url": "https://github.com/infiniteCrank/wizzardWars/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/infiniteCrank/wizzardWars.git"
+  },
+  "license": "MIT",
+  "author": "Julian wilkison-duran",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "cannon": "^0.6.2",
+    "three": "^0.173.0"
+  }
+}
