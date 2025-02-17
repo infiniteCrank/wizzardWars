@@ -33,7 +33,7 @@ world.addBody(groundBody);
 
 // ----- Global Arrays & Constants -----
 let platforms = []; // For enemy obstacle avoidance
-let collectibleCubes = []; // Available cubes for both player & enemy
+let collectibleCubes = []; // Shared cubes for player & enemy
 const cubesToRemove = [];
 let collectedCubes = 0;
 let totalCubes = 5; // Total cubes per round
@@ -62,7 +62,7 @@ class Projectile {
             this.dispose();
             return;
         }
-        // Move the projectile (using a fixed time-step factor)
+        // Move the projectile using a fixed time-step factor.
         this.mesh.position.add(
             this.direction.clone().multiplyScalar(this.speed * (1 / 60))
         );
@@ -85,13 +85,13 @@ class Player {
         this.scene = scene;
         this.world = world;
 
-        // Create player mesh
+        // Create player mesh.
         this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         this.mesh = new THREE.Mesh(this.geometry, this.material);
         scene.add(this.mesh);
 
-        // Create player physics body
+        // Create player physics body.
         this.body = new CANNON.Body({
             mass: 1,
             linearDamping: 0.9,
@@ -170,7 +170,7 @@ class Player {
     }
 }
 
-// ----- Enemy Class (with Jumping, Steering, & Robust Collision) -----
+// ----- Enemy Class (with Jumping, Steering, & Two Jump Attempts) -----
 class Enemy {
     constructor(scene, world, player) {
         this.scene = scene;
@@ -182,7 +182,7 @@ class Enemy {
         this.shootCooldown = 2000;
         this.lastShotTime = 0;
 
-        // Create enemy mesh (distinct color)
+        // Create enemy mesh (distinct color).
         this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         this.material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
         this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -208,6 +208,10 @@ class Enemy {
                 this.isGrounded = true;
             }
         });
+
+        // For handling jump attempts on a given target cube.
+        this.currentTarget = null;
+        this.jumpAttemptsForTarget = 0;
     }
 
     // Compute a steering force toward targetPos while avoiding obstacles.
@@ -218,14 +222,13 @@ class Enemy {
             .normalize()
             .multiplyScalar(this.speed);
 
-        // Use raycasting for obstacle detection and avoidance.
+        // Raycasting for obstacle avoidance.
         let avoidance = new THREE.Vector3(0, 0, 0);
         const raycaster = new THREE.Raycaster();
         raycaster.set(this.mesh.position, desired.clone());
         const obstacleMeshes = platforms.map((ob) => ob.mesh);
         const intersections = raycaster.intersectObjects(obstacleMeshes);
         if (intersections.length > 0 && intersections[0].distance < 1.0) {
-            // Use the face normal of the obstacle for avoidance.
             const normal = intersections[0].face.normal;
             avoidance.add(normal.clone().multiplyScalar(this.speed));
         }
@@ -255,52 +258,78 @@ class Enemy {
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
 
-        // ----- AI MOVEMENT -----
-        // Find the nearest collectible cube.
-        let targetCube = null;
-        let minDistance = Infinity;
-        for (const cubeObj of collectibleCubes) {
-            const distance = this.mesh.position.distanceTo(cubeObj.mesh.position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                targetCube = cubeObj;
+        // ===== Select a Target Cube =====
+        if (!this.currentTarget) {
+            let candidate = null;
+            let minDistance = Infinity;
+            for (const cubeObj of collectibleCubes) {
+                const dist = this.mesh.position.distanceTo(cubeObj.mesh.position);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    candidate = cubeObj;
+                }
             }
+            this.currentTarget = candidate;
+            this.jumpAttemptsForTarget = 0;
         }
 
-        if (targetCube) {
-            // If the cube is significantly higher than the enemy and the enemy is grounded, jump.
-            const heightDiff = targetCube.mesh.position.y - this.mesh.position.y;
-            if (heightDiff > 0.5 && this.isGrounded) {
-                this.body.velocity.y = 8; // Adjust jump strength as needed.
-                this.isGrounded = false;
-            }
+        // ===== Process the Current Target =====
+        if (this.currentTarget) {
+            const targetPos = this.currentTarget.mesh.position;
+            const heightDiff = targetPos.y - this.mesh.position.y;
 
-            const steering = this.computeSteering(targetCube.mesh.position);
-            this.body.velocity.x = steering.x;
-            this.body.velocity.z = steering.z;
-            this.mesh.lookAt(targetCube.mesh.position);
+            // If the cube is significantly higher than the enemy...
+            if (heightDiff > 0.5) {
+                if (this.jumpAttemptsForTarget < 2) {
+                    if (this.isGrounded) {
+                        // Try jumping.
+                        this.body.velocity.y = 8; // Adjust jump strength as needed.
+                        this.jumpAttemptsForTarget++;
+                        console.log("Enemy jump attempt:", this.jumpAttemptsForTarget);
+                    }
+                } else {
+                    // Already tried twice; abandon this target.
+                    console.log("Enemy skipping unreachable cube");
+                    collectibleCubes = collectibleCubes.filter(
+                        (cubeObj) => cubeObj !== this.currentTarget
+                    );
+                    this.currentTarget = null;
+                }
+            } else {
+                // If the enemy has gotten above the target platform, reset jumpAttempts.
+                if (this.body.position.y > targetPos.y + 0.3) {
+                    this.jumpAttemptsForTarget = 0;
+                }
+                // Compute steering toward the current target.
+                const steering = this.computeSteering(targetPos);
+                this.body.velocity.x = steering.x;
+                this.body.velocity.z = steering.z;
+                this.mesh.lookAt(targetPos);
 
-            // "Collect" the cube if close enough.
-            if (this.mesh.position.distanceTo(targetCube.mesh.position) < 0.5) {
-                console.log("Enemy collected a cube!");
-                scene.remove(targetCube.mesh);
-                targetCube.mesh.geometry.dispose();
-                targetCube.mesh.material.dispose();
-                world.removeBody(targetCube.body);
-                collectibleCubes = collectibleCubes.filter(
-                    (cubeObj) => cubeObj !== targetCube
-                );
-                collectedCubes++; // Increment the collected cubes counter.
-                if (collectedCubes === totalCubes) {
-                    resetPlatformsAndCubes();
+                // If close enough, collect the cube.
+                if (this.mesh.position.distanceTo(targetPos) < 0.5) {
+                    console.log("Enemy collected a cube!");
+                    scene.remove(this.currentTarget.mesh);
+                    this.currentTarget.mesh.geometry.dispose();
+                    this.currentTarget.mesh.material.dispose();
+                    world.removeBody(this.currentTarget.body);
+                    collectibleCubes = collectibleCubes.filter(
+                        (cubeObj) => cubeObj !== this.currentTarget
+                    );
+                    collectedCubes++;
+                    this.currentTarget = null;
+                    if (collectedCubes === totalCubes) {
+                        resetPlatformsAndCubes();
+                    }
                 }
             }
         } else {
+            // No current target—stop horizontal movement.
             this.body.velocity.x = 0;
             this.body.velocity.z = 0;
         }
 
-        // ----- AI SHOOTING -----
+        // ===== AI SHOOTING =====
         const distanceToPlayer = this.mesh.position.distanceTo(this.player.mesh.position);
         if (
             distanceToPlayer < 5 &&
@@ -309,11 +338,10 @@ class Enemy {
             this.shoot();
         }
 
-        // ----- Update Enemy Projectiles with Robust Collision Handling -----
+        // ===== Update Enemy Projectiles with Collision Handling =====
         const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
         this.projectiles.forEach((projectile, index) => {
             projectile.update();
-            // Create a bounding sphere around the projectile.
             const projectileSphere = new THREE.Sphere(projectile.mesh.position, 0.15);
             if (projectileSphere.intersectsBox(playerBox)) {
                 this.player.takeDamage(10);
@@ -328,9 +356,37 @@ class Enemy {
 }
 
 // ----- Platforms & Collectibles -----
+// This version of createPlatforms minimizes overlap between platforms.
 function createPlatforms(numPlatforms) {
+    // Clear any previously stored platforms (if resetting).
+    platforms = [];
     for (let i = 0; i < numPlatforms; i++) {
-        // Create a platform.
+        let validPosition = false;
+        let platformPosition;
+        const maxPosition = 4;
+        const minY = 0.5;
+        const maxY = 2;
+        const minDistance = 1.5; // Minimum distance between platform centers.
+        let attempts = 0;
+        while (!validPosition && attempts < 100) { // Try up to 100 times.
+            platformPosition = new THREE.Vector3(
+                Math.random() * (maxPosition * 2) - maxPosition,
+                Math.random() * (maxY - minY) + minY,
+                Math.random() * (maxPosition * 2) - maxPosition
+            );
+            validPosition = true;
+            // Check against existing platforms.
+            for (let j = 0; j < platforms.length; j++) {
+                const existingPos = platforms[j].mesh.position;
+                if (platformPosition.distanceTo(existingPos) < minDistance) {
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+
+        // Create the platform.
         const platformWidth = 1;
         const platformDepth = 1;
         const platformHeight = 0.1;
@@ -341,15 +397,7 @@ function createPlatforms(numPlatforms) {
         );
         const platformMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
         const platform = new THREE.Mesh(platformGeometry, platformMaterial);
-
-        const maxPosition = 4;
-        const minY = 0.5;
-        const maxY = 2;
-        platform.position.set(
-            Math.random() * (maxPosition * 2) - maxPosition,
-            Math.random() * (maxY - minY) + minY,
-            Math.random() * (maxPosition * 2) - maxPosition
-        );
+        platform.position.copy(platformPosition);
         scene.add(platform);
 
         // Create physics body for the platform.
@@ -362,8 +410,6 @@ function createPlatforms(numPlatforms) {
         );
         platformBody.position.copy(platform.position);
         world.addBody(platformBody);
-
-        // Save platform for enemy avoidance.
         platforms.push({ mesh: platform, body: platformBody });
 
         // Create a collectible cube on top of the platform.
@@ -401,7 +447,6 @@ function createPlatforms(numPlatforms) {
                 scene.remove(cube);
                 collectedCubes++;
                 console.log(`Collected cubes: ${collectedCubes}`);
-
                 if (collectedCubes === totalCubes) {
                     resetPlatformsAndCubes();
                 }
@@ -439,7 +484,7 @@ function removeAllPlatforms() {
     platforms = [];
 }
 
-// This function resets the platforms and cubes when all cubes have been collected.
+// Resets platforms and cubes when all cubes have been collected.
 function resetPlatformsAndCubes() {
     totalCubes = 5;
     removeAllPlatforms();
@@ -470,7 +515,7 @@ player.body.addEventListener("collide", (event) => {
 window.addEventListener("keydown", (e) => {
     keys[e.code] = true;
     if (e.code === "Space" && isGrounded) {
-        player.body.velocity.y = 8; // Jump
+        player.body.velocity.y = 8; // Jump for player.
         isGrounded = false;
     }
     if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
