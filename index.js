@@ -32,11 +32,11 @@ groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
 // ----- Global Arrays & Constants -----
-let platforms = []; // Used for enemy obstacle avoidance
-let collectibleCubes = []; // Both player and enemy use these
+let platforms = []; // For enemy obstacle avoidance
+let collectibleCubes = []; // Available cubes for both player & enemy
 const cubesToRemove = [];
 let collectedCubes = 0;
-let totalCubes = 5;
+let totalCubes = 5; // Total cubes per round
 
 const PROJECTILE_SPEED = 2;
 const PROJECTILE_LIFETIME = 3000;
@@ -62,7 +62,7 @@ class Projectile {
             this.dispose();
             return;
         }
-        // Move the projectile; note that multiplying by a fixed time-step
+        // Move the projectile (using a fixed time-step factor)
         this.mesh.position.add(
             this.direction.clone().multiplyScalar(this.speed * (1 / 60))
         );
@@ -116,11 +116,11 @@ class Player {
     }
 
     update(keys) {
-        // Sync the mesh with the physics body
+        // Sync the mesh with the physics body.
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
 
-        // Handle movement input
+        // Handle movement input.
         const targetVelocity = new CANNON.Vec3(0, 0, 0);
         if (keys["ArrowUp"]) targetVelocity.z = -this.speed;
         if (keys["ArrowDown"]) targetVelocity.z = this.speed;
@@ -139,7 +139,7 @@ class Player {
         this.body.velocity.x = targetVelocity.x;
         this.body.velocity.z = targetVelocity.z;
 
-        // Update projectiles
+        // Update projectiles.
         this.projectiles.forEach((projectile) => projectile.update());
         this.projectiles = this.projectiles.filter(
             (projectile) => projectile.mesh.parent !== null
@@ -188,7 +188,7 @@ class Enemy {
         this.mesh = new THREE.Mesh(this.geometry, this.material);
         scene.add(this.mesh);
 
-        // Create enemy physics body
+        // Create enemy physics body.
         this.body = new CANNON.Body({
             mass: 1,
             linearDamping: 0.9,
@@ -212,7 +212,7 @@ class Enemy {
 
     // Compute a steering force toward targetPos while avoiding obstacles.
     computeSteering(targetPos) {
-        // "Seek" vector toward target
+        // "Seek" vector toward target.
         const desired = new THREE.Vector3()
             .subVectors(targetPos, this.mesh.position)
             .normalize()
@@ -244,7 +244,7 @@ class Enemy {
             ENEMY_PROJECTILE_SPEED,
             ENEMY_PROJECTILE_LIFETIME
         );
-        enemyProjectile.material.color.set(0xff0000); // Differentiate enemy shots
+        enemyProjectile.material.color.set(0xff0000); // Differentiate enemy shots.
         this.projectiles.push(enemyProjectile);
         this.scene.add(enemyProjectile.mesh);
         this.lastShotTime = Date.now();
@@ -271,7 +271,7 @@ class Enemy {
             // If the cube is significantly higher than the enemy and the enemy is grounded, jump.
             const heightDiff = targetCube.mesh.position.y - this.mesh.position.y;
             if (heightDiff > 0.5 && this.isGrounded) {
-                this.body.velocity.y = 8; // Adjust jump strength as needed
+                this.body.velocity.y = 8; // Adjust jump strength as needed.
                 this.isGrounded = false;
             }
 
@@ -290,6 +290,10 @@ class Enemy {
                 collectibleCubes = collectibleCubes.filter(
                     (cubeObj) => cubeObj !== targetCube
                 );
+                collectedCubes++; // Increment the collected cubes counter.
+                if (collectedCubes === totalCubes) {
+                    resetPlatformsAndCubes();
+                }
             }
         } else {
             this.body.velocity.x = 0;
@@ -399,10 +403,7 @@ function createPlatforms(numPlatforms) {
                 console.log(`Collected cubes: ${collectedCubes}`);
 
                 if (collectedCubes === totalCubes) {
-                    totalCubes = 5;
-                    removeAllPlatforms();
-                    createPlatforms(totalCubes);
-                    collectedCubes = 0;
+                    resetPlatformsAndCubes();
                 }
             }
         });
@@ -434,6 +435,14 @@ function removeAllPlatforms() {
     cubesToRemove.length = 0;
     collectibleCubes = [];
     platforms = [];
+}
+
+// This function resets the platforms and cubes when all cubes have been collected.
+function resetPlatformsAndCubes() {
+    totalCubes = 5;
+    removeAllPlatforms();
+    createPlatforms(totalCubes);
+    collectedCubes = 0;
 }
 
 // ----- Instantiate Player & Enemy -----
