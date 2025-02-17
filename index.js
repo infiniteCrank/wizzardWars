@@ -42,6 +42,7 @@ const PROJECTILE_SPEED = 2;
 const PROJECTILE_LIFETIME = 3000;
 const ENEMY_PROJECTILE_SPEED = 2;
 const ENEMY_PROJECTILE_LIFETIME = 3000;
+const DAMAGE_AMOUNT = 10; // Both projectiles deal 10 damage
 
 // ----- Projectile Class -----
 class Projectile {
@@ -62,7 +63,7 @@ class Projectile {
             this.dispose();
             return;
         }
-        // Move the projectile using a fixed time-step factor.
+        // Move the projectile (using a fixed time-step factor)
         this.mesh.position.add(
             this.direction.clone().multiplyScalar(this.speed * (1 / 60))
         );
@@ -170,15 +171,15 @@ class Player {
     }
 }
 
-// ----- Enemy Class (with Jumping, Steering, & Two Jump Attempts) -----
+// ----- Enemy Class (with Jumping, Steering, Two Jump Attempts, and Health) -----
 class Enemy {
     constructor(scene, world, player) {
         this.scene = scene;
         this.world = world;
         this.player = player;
-        this.speed = 3;
+        this.health = 100; // Same as player's starting health
         this.projectiles = [];
-        this.health = 100;
+        this.speed = 3;
         this.shootCooldown = 2000;
         this.lastShotTime = 0;
 
@@ -198,7 +199,7 @@ class Enemy {
         this.body.position.set(2, 2.5, 2);
         world.addBody(this.body);
 
-        // Track if the enemy is grounded to allow jumping.
+        // Track if the enemy is grounded (to allow jumping).
         this.isGrounded = false;
         this.body.addEventListener("collide", (event) => {
             if (
@@ -214,15 +215,23 @@ class Enemy {
         this.jumpAttemptsForTarget = 0;
     }
 
+    // Add a takeDamage method similar to the player's.
+    takeDamage(amount) {
+        this.health -= amount;
+        if (this.health < 0) this.health = 0;
+        console.log(`Enemy Health: ${this.health}`);
+        if (this.health === 0) {
+            console.log("Enemy is dead!");
+        }
+    }
+
     // Compute a steering force toward targetPos while avoiding obstacles.
     computeSteering(targetPos) {
-        // "Seek" vector toward target.
         const desired = new THREE.Vector3()
             .subVectors(targetPos, this.mesh.position)
             .normalize()
             .multiplyScalar(this.speed);
 
-        // Raycasting for obstacle avoidance.
         let avoidance = new THREE.Vector3(0, 0, 0);
         const raycaster = new THREE.Raycaster();
         raycaster.set(this.mesh.position, desired.clone());
@@ -278,17 +287,14 @@ class Enemy {
             const targetPos = this.currentTarget.mesh.position;
             const heightDiff = targetPos.y - this.mesh.position.y;
 
-            // If the cube is significantly higher than the enemy...
             if (heightDiff > 0.5) {
                 if (this.jumpAttemptsForTarget < 2) {
                     if (this.isGrounded) {
-                        // Try jumping.
-                        this.body.velocity.y = 8; // Adjust jump strength as needed.
+                        this.body.velocity.y = 8; // Try jumping.
                         this.jumpAttemptsForTarget++;
                         console.log("Enemy jump attempt:", this.jumpAttemptsForTarget);
                     }
                 } else {
-                    // Already tried twice; abandon this target.
                     console.log("Enemy skipping unreachable cube");
                     collectibleCubes = collectibleCubes.filter(
                         (cubeObj) => cubeObj !== this.currentTarget
@@ -296,17 +302,14 @@ class Enemy {
                     this.currentTarget = null;
                 }
             } else {
-                // If the enemy has gotten above the target platform, reset jumpAttempts.
                 if (this.body.position.y > targetPos.y + 0.3) {
                     this.jumpAttemptsForTarget = 0;
                 }
-                // Compute steering toward the current target.
                 const steering = this.computeSteering(targetPos);
                 this.body.velocity.x = steering.x;
                 this.body.velocity.z = steering.z;
                 this.mesh.lookAt(targetPos);
 
-                // If close enough, collect the cube.
                 if (this.mesh.position.distanceTo(targetPos) < 0.5) {
                     console.log("Enemy collected a cube!");
                     scene.remove(this.currentTarget.mesh);
@@ -324,7 +327,6 @@ class Enemy {
                 }
             }
         } else {
-            // No current target—stop horizontal movement.
             this.body.velocity.x = 0;
             this.body.velocity.z = 0;
         }
@@ -338,13 +340,13 @@ class Enemy {
             this.shoot();
         }
 
-        // ===== Update Enemy Projectiles with Collision Handling =====
+        // ===== Update Enemy Projectiles =====
         const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
         this.projectiles.forEach((projectile, index) => {
             projectile.update();
             const projectileSphere = new THREE.Sphere(projectile.mesh.position, 0.15);
             if (projectileSphere.intersectsBox(playerBox)) {
-                this.player.takeDamage(10);
+                this.player.takeDamage(DAMAGE_AMOUNT);
                 projectile.dispose();
                 this.projectiles.splice(index, 1);
             }
@@ -356,9 +358,8 @@ class Enemy {
 }
 
 // ----- Platforms & Collectibles -----
-// This version of createPlatforms minimizes overlap between platforms.
 function createPlatforms(numPlatforms) {
-    // Clear any previously stored platforms (if resetting).
+    // Clear any previously stored platforms.
     platforms = [];
     for (let i = 0; i < numPlatforms; i++) {
         let validPosition = false;
@@ -368,14 +369,13 @@ function createPlatforms(numPlatforms) {
         const maxY = 2;
         const minDistance = 1.5; // Minimum distance between platform centers.
         let attempts = 0;
-        while (!validPosition && attempts < 100) { // Try up to 100 times.
+        while (!validPosition && attempts < 100) {
             platformPosition = new THREE.Vector3(
                 Math.random() * (maxPosition * 2) - maxPosition,
                 Math.random() * (maxY - minY) + minY,
                 Math.random() * (maxPosition * 2) - maxPosition
             );
             validPosition = true;
-            // Check against existing platforms.
             for (let j = 0; j < platforms.length; j++) {
                 const existingPos = platforms[j].mesh.position;
                 if (platformPosition.distanceTo(existingPos) < minDistance) {
@@ -386,7 +386,6 @@ function createPlatforms(numPlatforms) {
             attempts++;
         }
 
-        // Create the platform.
         const platformWidth = 1;
         const platformDepth = 1;
         const platformHeight = 0.1;
@@ -400,7 +399,6 @@ function createPlatforms(numPlatforms) {
         platform.position.copy(platformPosition);
         scene.add(platform);
 
-        // Create physics body for the platform.
         const platformBody = new CANNON.Body({ mass: 0 });
         platformBody.userData = { isPlatform: true };
         platformBody.addShape(
@@ -412,7 +410,7 @@ function createPlatforms(numPlatforms) {
         world.addBody(platformBody);
         platforms.push({ mesh: platform, body: platformBody });
 
-        // Create a collectible cube on top of the platform.
+        // Create a collectible cube on the platform.
         const cubeSize = 0.3;
         const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
         const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
@@ -456,7 +454,7 @@ function createPlatforms(numPlatforms) {
 }
 
 function removeAllPlatforms() {
-    // Remove all platforms (preserving the ground, player, and enemy)
+    // Remove all platforms and collectibles (preserving ground, player, and enemy)
     const objectsToRemove = scene.children.filter((object) => {
         return (
             object instanceof THREE.Mesh &&
@@ -468,12 +466,12 @@ function removeAllPlatforms() {
     objectsToRemove.forEach((object) => {
         if (object.geometry) object.geometry.dispose();
         if (object.material) object.material.dispose();
-
-        const bodyToRemove = world.bodies.find(
-            (body) => {
-                return (body.userData && body.userData.isPlatform) || (body.userData && body.userData.isCollectible)
-            }
-        );
+        const bodyToRemove = world.bodies.find((body) => {
+            return (
+                body.userData &&
+                ((body.userData.isPlatform) || (body.userData.isCollectible))
+            );
+        });
         if (bodyToRemove) {
             world.removeBody(bodyToRemove);
         }
@@ -484,7 +482,6 @@ function removeAllPlatforms() {
     platforms = [];
 }
 
-// Resets platforms and cubes when all cubes have been collected.
 function resetPlatformsAndCubes() {
     totalCubes = 5;
     removeAllPlatforms();
@@ -515,7 +512,7 @@ player.body.addEventListener("collide", (event) => {
 window.addEventListener("keydown", (e) => {
     keys[e.code] = true;
     if (e.code === "Space" && isGrounded) {
-        player.body.velocity.y = 8; // Jump for player.
+        player.body.velocity.y = 8; // Player jump.
         isGrounded = false;
     }
     if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
@@ -537,20 +534,28 @@ createPlatforms(totalCubes);
 // ----- Animation Loop -----
 function animate() {
     requestAnimationFrame(animate);
-
     world.step(1 / 60);
-
     while (cubesToRemove.length) {
         const bodyToRemove = cubesToRemove.pop();
         world.removeBody(bodyToRemove);
     }
-
     player.update(keys);
     enemy.update();
 
+    // Check collision for player's projectiles hitting the enemy.
+    const enemyBox = new THREE.Box3().setFromObject(enemy.mesh);
+    for (let i = player.projectiles.length - 1; i >= 0; i--) {
+        const proj = player.projectiles[i];
+        const projSphere = new THREE.Sphere(proj.mesh.position, 0.15);
+        if (projSphere.intersectsBox(enemyBox)) {
+            enemy.takeDamage(DAMAGE_AMOUNT);
+            proj.dispose();
+            player.projectiles.splice(i, 1);
+        }
+    }
+
     camera.position.copy(player.mesh.position).add(cameraOffset);
     camera.lookAt(player.mesh.position.clone().add(cameraLookAtOffset));
-
     renderer.render(scene, camera);
 }
 
