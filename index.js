@@ -425,8 +425,11 @@ function removeAllPlatforms() {
         if (object.material) object.material.dispose();
 
         const bodyToRemove = world.bodies.find(
-            (body) => body.userData && body.userData.mesh === object
+            (body) => {
+                return (body.userData && body.userData.isPlatform) || (body.userData && body.userData.isCollectible)
+            }
         );
+        console.log(bodyToRemove)
         if (bodyToRemove) {
             world.removeBody(bodyToRemove);
         }
