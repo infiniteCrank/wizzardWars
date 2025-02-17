@@ -249,6 +249,16 @@ class Projectile {
     }
 }
 
+let playerHealth = 100; // Starting health for the player
+const maxPlayerHealth = 100; // Maximum health for normalizing the health bar
+
+function updateHealthBar() {
+    const healthBarElement = document.getElementById("health-bar");
+    const healthPercentage = (playerHealth / maxPlayerHealth) * 100; // Calculate current health percentage
+    healthBarElement.style.width = healthPercentage + "%"; // Update width of the health bar
+    healthBarElement.style.background = healthPercentage < 30 ? "red" : "green"; // Change color if health is low
+}
+updateHealthBar();
 
 let playerProjectiles = [];
 const PROJECTILE_SPEED = 2; // Speed of the projectile
