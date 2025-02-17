@@ -77,6 +77,7 @@ class Player {
         this.speed = 5;
         this.scene = scene;
         this.world = world;
+        this.isAlive = true;
         this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -87,13 +88,32 @@ class Player {
         world.addBody(this.body);
     }
     shoot() {
+        if (!this.isAlive) return; // Disable shooting when dead
         const direction = new THREE.Vector3(0, 0, -1);
         direction.applyQuaternion(this.mesh.quaternion);
         const newProjectile = new Projectile(this.mesh.position.clone(), direction, PROJECTILE_SPEED, PROJECTILE_LIFETIME);
         this.projectiles.push(newProjectile);
         this.scene.add(newProjectile.mesh);
     }
+    respawn() {
+        this.health = this.maxHealth;
+        this.isAlive = true;
+        this.scene.add(this.mesh);
+        this.world.addBody(this.body);
+
+        // Set random respawn position, assuming the playable area is a 10x10 unit square
+        const min = -5, max = 5;
+        const randomX = Math.random() * (max - min) + min;
+        const randomZ = Math.random() * (max - min) + min;
+
+        this.mesh.position.set(randomX, 2.5, randomZ);
+        this.body.position.set(randomX, 2.5, randomZ);
+
+        console.log("Player has respawned!");
+        this.updateHealthBar();
+    }
     update(keys) {
+        if (!this.isAlive) return; // Skip updates if dead
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
         const targetVelocity = new CANNON.Vec3(0, 0, 0);
@@ -112,14 +132,25 @@ class Player {
         this.updateHealthBar();
     }
     takeDamage(amount) {
+        if (!this.isAlive) return; // If player is dead, don't process damage
         this.health -= amount;
-        if (this.health < 0) this.health = 0;
-        console.log(`Player Health: ${this.health}`);
-        this.updateHealthBar();
-        if (this.health === 0) {
+        if (this.health <= 0) {
+            this.health = 0;
             console.log("Player is dead!");
-            // Add death/respawn logic if needed.
+            this.isAlive = false;
+            this.scene.remove(this.mesh);
+            this.world.removeBody(this.body);
+            this.removeAllProjectiles();
+            setTimeout(() => this.respawn(), 10000); // Respawn after 10 sec (10000 ms)
+        } else {
+            this.updateHealthBar();
         }
+    }
+    removeAllProjectiles() {
+        this.projectiles.forEach((projectile) => {
+            projectile.dispose();
+        });
+        this.projectiles.length = 0;
     }
     updateHealthBar() {
         const healthBarElement = document.getElementById("health-bar");
@@ -141,6 +172,7 @@ class Enemy {
         this.maxHealth = 100;
         this.projectiles = [];
         this.speed = 3;
+        this.isAlive = true; // Track enemy status
         this.shootCooldown = 2000;
         this.lastShotTime = 0;
         this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
@@ -162,14 +194,18 @@ class Enemy {
         this.updateHealthBar();
     }
     takeDamage(amount) {
+        if (!this.isAlive) return; // If enemy is dead, don't process damage
         this.health -= amount;
-        if (this.health < 0) this.health = 0;
-        console.log(`Enemy Health: ${this.health}`);
-        this.updateHealthBar();
-        if (this.health === 0) {
+        if (this.health <= 0) {
+            this.health = 0;
             console.log("Enemy is dead!");
-            scene.remove(this.mesh);
-            world.removeBody(this.body);
+            this.isAlive = false;
+            this.scene.remove(this.mesh);
+            this.world.removeBody(this.body);
+            this.removeAllProjectiles();
+            setTimeout(() => this.respawn(), 10000); // Respawn after 10 sec (10000 ms)
+        } else {
+            this.updateHealthBar();
         }
     }
     updateHealthBar() {
@@ -195,6 +231,7 @@ class Enemy {
         return steering.normalize().multiplyScalar(this.speed);
     }
     shoot() {
+        if (!this.isAlive) return; // Disable shooting when dead
         const direction = new THREE.Vector3().subVectors(this.player.mesh.position, this.mesh.position).normalize();
         const enemyProjectile = new Projectile(this.mesh.position.clone(), direction, ENEMY_PROJECTILE_SPEED, ENEMY_PROJECTILE_LIFETIME);
         enemyProjectile.material.color.set(0xff0000);
@@ -202,7 +239,25 @@ class Enemy {
         this.scene.add(enemyProjectile.mesh);
         this.lastShotTime = Date.now();
     }
+    respawn() {
+        this.health = this.maxHealth;
+        this.isAlive = true;
+        this.scene.add(this.mesh);
+        this.world.addBody(this.body);
+
+        // Set a random respawn position, assuming the playable area is a 10x10 unit square
+        const min = -5, max = 5;
+        const randomX = Math.random() * (max - min) + min;
+        const randomZ = Math.random() * (max - min) + min;
+
+        this.mesh.position.set(randomX, 2.5, randomZ);
+        this.body.position.set(randomX, 2.5, randomZ);
+
+        console.log("Enemy has respawned!");
+        this.updateHealthBar();
+    }
     update() {
+        if (!this.isAlive) return; // Skip updates if dead
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
         if (!this.currentTarget) {
@@ -249,6 +304,7 @@ class Enemy {
                     currentRoundCubeCount++;
                     document.getElementById("enemy-cubes").innerText = "Enemy Cubes: " + totalEnemyCubeCount;
                     this.currentTarget = null;
+                    console.log(`Player Cubes (Round): ${currentRoundCubeCount} / ${totalCubes}`);
                     if (currentRoundCubeCount >= totalCubes) {
                         currentRoundCubeCount = 0;
                         resetPlatformsAndCubes();
@@ -274,6 +330,12 @@ class Enemy {
             }
         });
         this.projectiles = this.projectiles.filter((proj) => proj.mesh.parent !== null);
+    }
+    removeAllProjectiles() {
+        this.projectiles.forEach((projectile) => {
+            projectile.dispose();
+        });
+        this.projectiles.length = 0;
     }
 }
 
