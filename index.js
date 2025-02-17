@@ -429,7 +429,6 @@ function removeAllPlatforms() {
                 return (body.userData && body.userData.isPlatform) || (body.userData && body.userData.isCollectible)
             }
         );
-        console.log(bodyToRemove)
         if (bodyToRemove) {
             world.removeBody(bodyToRemove);
         }
