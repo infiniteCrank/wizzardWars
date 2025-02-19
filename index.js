@@ -29,9 +29,6 @@ let collectibleCubes = [];   // Cubes available for both player & enemy
 const cubesToRemove = [];
 let totalCubes = 5;          // Total cubes per round
 
-// NEW: Global cumulative counters (these will NOT be reset each round)
-let totalPlayerCubeCount = 0;
-let totalEnemyCubeCount = 0;
 // NEW: Current round cube counter (resets each round)
 let currentRoundCubeCount = 0;
 
@@ -74,6 +71,7 @@ class Player {
         this.health = 100;
         this.maxHealth = 100;
         this.projectiles = [];
+        this.cubeCount = 0;
         this.speed = 5;
         this.scene = scene;
         this.world = world;
@@ -160,6 +158,23 @@ class Player {
             healthBarElement.style.background = healthPercentage < 30 ? "red" : "green";
         }
     }
+    activateHealthRegen() {
+        if (this.spendCubes(10)) { // Cost of the power-up
+            this.health = Math.min(this.health + this.maxHealth / 2, this.maxHealth);
+            this.updateHealthBar();
+            console.log("Health Regenerated!");
+        } else {
+            console.log("Not enough cubes to activate Health Regeneration!");
+        }
+    }
+    spendCubes(amount) {
+        if (this.cubeCount >= amount) {
+            this.cubeCount -= amount;
+            return true; // Cube spending successful
+        }
+        return false; // Not enough cubes
+    }
+
 }
 
 // ----- Enemy Class (with Health & Health Bar) -----
@@ -170,6 +185,7 @@ class Enemy {
         this.player = player;
         this.health = 100;
         this.maxHealth = 100;
+        this.cubeCount = 0;
         this.projectiles = [];
         this.speed = 3;
         this.isAlive = true; // Track enemy status
@@ -300,9 +316,9 @@ class Enemy {
                     this.currentTarget.mesh.material.dispose();
                     world.removeBody(this.currentTarget.body);
                     collectibleCubes = collectibleCubes.filter((cubeObj) => cubeObj !== this.currentTarget);
-                    totalEnemyCubeCount++;
+                    this.cubeCount++;
                     currentRoundCubeCount++;
-                    document.getElementById("enemy-cubes").innerText = "Enemy Cubes: " + totalEnemyCubeCount;
+                    document.getElementById("enemy-cubes").innerText = "Enemy Cubes: " + this.cubeCount;
                     this.currentTarget = null;
                     console.log(`Player Cubes (Round): ${currentRoundCubeCount} / ${totalCubes}`);
                     if (currentRoundCubeCount >= totalCubes) {
@@ -401,9 +417,9 @@ function createPlatforms(numPlatforms) {
                 cube.geometry.dispose();
                 cube.material.dispose();
                 scene.remove(cube);
-                totalPlayerCubeCount++;
+                player.cubeCount++;
                 currentRoundCubeCount++;
-                document.getElementById("player-cubes").innerText = "Player Cubes: " + totalPlayerCubeCount;
+                document.getElementById("player-cubes").innerText = "Player Cubes: " + player.cubeCount;
                 console.log(`Player Cubes (Round): ${currentRoundCubeCount} / ${totalCubes}`);
                 // Check if this round is complete.
                 if (currentRoundCubeCount >= totalCubes) {
@@ -477,6 +493,10 @@ window.addEventListener("keydown", (e) => {
 
 window.addEventListener("keyup", (e) => {
     keys[e.code] = false;
+});
+
+document.getElementById("healthRegenButton").addEventListener("click", () => {
+    player.activateHealthRegen();
 });
 
 // ----- Camera Offset -----
