@@ -188,7 +188,7 @@ class Enemy {
         this.cubeCount = 0;
         this.projectiles = [];
         this.speed = 3;
-        this.isAlive = true; // Track enemy status
+        this.isAlive = true;
         this.shootCooldown = 2000;
         this.lastShotTime = 0;
         this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
@@ -209,8 +209,9 @@ class Enemy {
         this.jumpAttemptsForTarget = 0;
         this.updateHealthBar();
     }
+
     takeDamage(amount) {
-        if (!this.isAlive) return; // If enemy is dead, don't process damage
+        if (!this.isAlive) return;
         this.health -= amount;
         if (this.health <= 0) {
             this.health = 0;
@@ -219,11 +220,12 @@ class Enemy {
             this.scene.remove(this.mesh);
             this.world.removeBody(this.body);
             this.removeAllProjectiles();
-            setTimeout(() => this.respawn(), 10000); // Respawn after 10 sec (10000 ms)
+            setTimeout(() => this.respawn(), 10000);
         } else {
             this.updateHealthBar();
         }
     }
+
     updateHealthBar() {
         const enemyHealthBar = document.getElementById("enemy-health-bar");
         if (enemyHealthBar && this.health > 0) {
@@ -232,6 +234,7 @@ class Enemy {
             enemyHealthBar.style.background = healthPercentage < 30 ? "red" : "green";
         }
     }
+
     computeSteering(targetPos) {
         const desired = new THREE.Vector3().subVectors(targetPos, this.mesh.position).normalize().multiplyScalar(this.speed);
         let avoidance = new THREE.Vector3(0, 0, 0);
@@ -246,8 +249,9 @@ class Enemy {
         const steering = desired.add(avoidance);
         return steering.normalize().multiplyScalar(this.speed);
     }
+
     shoot() {
-        if (!this.isAlive) return; // Disable shooting when dead
+        if (!this.isAlive) return;
         const direction = new THREE.Vector3().subVectors(this.player.mesh.position, this.mesh.position).normalize();
         const enemyProjectile = new Projectile(this.mesh.position.clone(), direction, ENEMY_PROJECTILE_SPEED, ENEMY_PROJECTILE_LIFETIME);
         enemyProjectile.material.color.set(0xff0000);
@@ -255,13 +259,13 @@ class Enemy {
         this.scene.add(enemyProjectile.mesh);
         this.lastShotTime = Date.now();
     }
+
     respawn() {
         this.health = this.maxHealth;
         this.isAlive = true;
         this.scene.add(this.mesh);
         this.world.addBody(this.body);
 
-        // Set a random respawn position, assuming the playable area is a 10x10 unit square
         const min = -5, max = 5;
         const randomX = Math.random() * (max - min) + min;
         const randomZ = Math.random() * (max - min) + min;
@@ -272,8 +276,35 @@ class Enemy {
         console.log("Enemy has respawned!");
         this.updateHealthBar();
     }
+
+    // NEW: Enemy health regeneration method
+    activateHealthRegen() {
+        if (this.spendCubes(10)) { // Spend 10 cubes
+            this.health = Math.min(this.health + this.maxHealth / 2, this.maxHealth);
+            this.updateHealthBar();
+            console.log("Enemy Health Regenerated!");
+        } else {
+            console.log("Enemy does not have enough cubes to regenerate health!");
+        }
+    }
+
+    // NEW: Helper method to spend cubes
+    spendCubes(amount) {
+        if (this.cubeCount >= amount) {
+            this.cubeCount -= amount;
+            return true;
+        }
+        return false;
+    }
+
     update() {
-        if (!this.isAlive) return; // Skip updates if dead
+        if (!this.isAlive) return;
+
+        // Check if enemy health is below 20% and if it has at least 10 cubes, then regenerate health.
+        if (this.health < 0.2 * this.maxHealth && this.cubeCount >= 10) {
+            this.activateHealthRegen();
+        }
+
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
         if (!this.currentTarget) {
@@ -347,6 +378,7 @@ class Enemy {
         });
         this.projectiles = this.projectiles.filter((proj) => proj.mesh.parent !== null);
     }
+
     removeAllProjectiles() {
         this.projectiles.forEach((projectile) => {
             projectile.dispose();
