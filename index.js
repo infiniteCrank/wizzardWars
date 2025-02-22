@@ -79,6 +79,8 @@ class Player {
         this.health = 100;
         this.maxHealth = 100;
         this.projectiles = [];
+        this.shootCooldown = 1000;
+        this.lastShotTime = 0;
         this.cubeCount = 0;
         this.speed = 5;
         this.scene = scene;
@@ -98,7 +100,7 @@ class Player {
         world.addBody(this.body);
     }
     shoot() {
-        if (!this.isAlive) return;
+        if (!this.isAlive || Date.now() - this.lastShotTime < this.shootCooldown) return;
         const direction = new THREE.Vector3(0, 0, -1);
         direction.applyQuaternion(this.mesh.quaternion);
         const newProjectile = new Projectile(
@@ -109,6 +111,8 @@ class Player {
         );
         this.projectiles.push(newProjectile);
         this.scene.add(newProjectile.mesh);
+        // Update last shot time
+        this.lastShotTime = Date.now();
     }
     respawn() {
         this.health = this.maxHealth;
