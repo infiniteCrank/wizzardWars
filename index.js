@@ -227,7 +227,7 @@ class Enemy {
         // This variable controls the enemy's movement speed.
         this.movementSpeed = 1;
         this.isAlive = true;
-        this.shootCooldown = 2000;
+        this.shootCooldown = 1000;
         this.lastShotTime = 0;
         this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
         this.material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
@@ -660,7 +660,7 @@ createPlatforms(totalCubes);
 
 // ----- Countdown Setup -----
 // Pause game logic until the countdown finishes.
-let countdownTime = 3; // countdown in seconds
+let countdownTime = 10; // countdown in seconds
 let countdownActive = true;
 
 // Create an off-screen canvas for drawing the countdown.
@@ -709,7 +709,7 @@ const countdownInterval = setInterval(() => {
 
 // Function to start the countdown
 function startCountdown() {
-    countdownTime = 3; // Set the countdown time
+    countdownTime = 10; // Set the countdown time
     countdownActive = true; // Activate the countdown
 
     scene.add(countdownSprite); // Ensure the countdown sprite is added to the scene
