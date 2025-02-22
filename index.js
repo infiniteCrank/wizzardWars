@@ -78,6 +78,7 @@ class Player {
     constructor(scene, world) {
         this.health = 100;
         this.maxHealth = 100;
+        this.kills = 0;  // Track the number of kills
         this.projectiles = [];
         this.shootCooldown = 1000;
         this.lastShotTime = 0;
@@ -162,6 +163,13 @@ class Player {
             this.scene.remove(this.mesh);
             this.world.removeBody(this.body);
             this.removeAllProjectiles();
+            // Increment the enemy's kill count
+            enemy.kills++;
+            // Check for win condition
+            if (enemy.kills >= 3) {
+                console.log("Enemy wins the game!");
+                // You can add more logic here to stop the game or show a win screen
+            }
             setTimeout(() => this.respawn(), 10000); // Respawn after 10 sec
         } else {
             this.updateHealthBar();
@@ -214,6 +222,7 @@ class Enemy {
         this.health = 100;
         this.maxHealth = 100;
         this.cubeCount = 0;
+        this.kills = 0;  // Track the number of kills
         this.projectiles = [];
         // This variable controls the enemy's movement speed.
         this.movementSpeed = 1;
@@ -256,6 +265,14 @@ class Enemy {
             this.scene.remove(this.mesh);
             this.world.removeBody(this.body);
             this.removeAllProjectiles();
+            // Increment the player's kill count
+            player.kills++;
+
+            // Check for win condition
+            if (player.kills >= 3) {
+                console.log("Player wins the game!");
+                // You can add more logic here to stop the game or show a win screen
+            }
             setTimeout(() => this.respawn(), 10000);
         } else {
             this.updateHealthBar();
