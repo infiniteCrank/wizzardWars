@@ -211,7 +211,8 @@ class Enemy {
         this.maxHealth = 100;
         this.cubeCount = 0;
         this.projectiles = [];
-        this.speed = 3;
+        // This variable controls the enemy's movement speed.
+        this.movementSpeed = 1;
         this.isAlive = true;
         this.shootCooldown = 2000;
         this.lastShotTime = 0;
@@ -271,7 +272,7 @@ class Enemy {
         const desired = new THREE.Vector3()
             .subVectors(targetPos, this.mesh.position)
             .normalize()
-            .multiplyScalar(this.speed);
+            .multiplyScalar(this.movementSpeed);
         let avoidance = new THREE.Vector3(0, 0, 0);
         const raycaster = new THREE.Raycaster();
         raycaster.set(this.mesh.position, desired.clone());
@@ -279,10 +280,10 @@ class Enemy {
         const intersections = raycaster.intersectObjects(obstacleMeshes);
         if (intersections.length > 0 && intersections[0].distance < 1.0) {
             const normal = intersections[0].face.normal;
-            avoidance.add(normal.clone().multiplyScalar(this.speed));
+            avoidance.add(normal.clone().multiplyScalar(this.movementSpeed));
         }
         const steering = desired.add(avoidance);
-        return steering.normalize().multiplyScalar(this.speed);
+        return steering.normalize().multiplyScalar(this.movementSpeed);
     }
 
     shoot() {
@@ -379,8 +380,8 @@ class Enemy {
                 if (distanceToPlayer < MIN_DISTANCE_TO_PLAYER) {
                     // Too close: steer away from the player.
                     const directionAway = this.mesh.position.clone().sub(targetPos).normalize();
-                    this.body.velocity.x = directionAway.x * this.speed;
-                    this.body.velocity.z = directionAway.z * this.speed;
+                    this.body.velocity.x = directionAway.x * this.movementSpeed;
+                    this.body.velocity.z = directionAway.z * this.movementSpeed;
                     this.mesh.lookAt(targetPos);
                 } else {
                     // Not too close: approach the player normally.
@@ -661,7 +662,7 @@ scene.add(countdownSprite);
 // Function to update the countdown canvas.
 function updateCountdown() {
     countdownContext.clearRect(0, 0, countdownCanvas.width, countdownCanvas.height);
-    countdownContext.font = "bold 200px Arial";
+    countdownContext.font = "bold 100px Arial";
     countdownContext.fillStyle = "white";
     countdownContext.textAlign = "center";
     countdownContext.textBaseline = "middle";
