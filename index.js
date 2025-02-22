@@ -167,8 +167,8 @@ class Player {
             enemy.kills++;
             // Check for win condition
             if (enemy.kills >= 3) {
-                console.log("Enemy wins the game!");
-                // You can add more logic here to stop the game or show a win screen
+                displayWinner("Enemy wins!");
+                return;
             }
             setTimeout(() => this.respawn(), 10000); // Respawn after 10 sec
         } else {
@@ -270,8 +270,8 @@ class Enemy {
 
             // Check for win condition
             if (player.kills >= 3) {
-                console.log("Player wins the game!");
-                // You can add more logic here to stop the game or show a win screen
+                displayWinner("Player Wins!");
+                return;
             }
             setTimeout(() => this.respawn(), 10000);
         } else {
@@ -706,6 +706,97 @@ const countdownInterval = setInterval(() => {
         updateCountdown();
     }
 }, 1000);
+
+// Function to start the countdown
+function startCountdown() {
+    countdownTime = 3; // Set the countdown time
+    countdownActive = true; // Activate the countdown
+
+    scene.add(countdownSprite); // Ensure the countdown sprite is added to the scene
+    updateCountdown(); // Draw initial countdown number
+
+    const countdownInterval = setInterval(() => {
+        countdownTime--;
+        if (countdownTime <= 0) {
+            clearInterval(countdownInterval);
+            scene.remove(countdownSprite);
+            countdownActive = false;
+            player.respawn()
+        } else {
+            updateCountdown();
+        }
+    }, 1000);
+}
+// ----- winner screen -----
+// Create a canvas for displaying the winner's message
+const winnerCanvas = document.createElement("canvas");
+winnerCanvas.width = 512;
+winnerCanvas.height = 512;
+const winnerContext = winnerCanvas.getContext("2d");
+
+// Create a texture from the canvas and use it on a sprite.
+const winnerTexture = new THREE.CanvasTexture(winnerCanvas);
+const winnerMaterial = new THREE.SpriteMaterial({
+    map: winnerTexture,
+    transparent: true,
+});
+const winnerSprite = new THREE.Sprite(winnerMaterial);
+winnerSprite.scale.set(5, 5, 1);
+winnerSprite.position.set(0, 2, 0);
+scene.add(winnerSprite);
+
+function displayWinner(winnerText) {
+    // Clear the canvas
+    winnerContext.clearRect(0, 0, winnerCanvas.width, winnerCanvas.height);
+
+    // Set font and styles
+    winnerContext.font = "bold 50px Arial";
+    winnerContext.fillStyle = "white";
+    winnerContext.textAlign = "center";
+    winnerContext.textBaseline = "middle";
+
+    // Draw text
+    winnerContext.fillText(winnerText, winnerCanvas.width / 2, winnerCanvas.height / 2);
+
+    // Mark texture for update
+    winnerTexture.needsUpdate = true;
+
+    // Ensure the sprite is in the scene
+    if (!scene.children.includes(winnerSprite)) {
+        scene.add(winnerSprite);
+    }
+
+    // Optionally pause game logic
+    countdownActive = true; // Prevent further game play
+
+    // Set timeout to clear winner display after a delay
+    setTimeout(() => {
+        // Clear the winner message
+        winnerContext.clearRect(0, 0, winnerCanvas.width, winnerCanvas.height);
+        winnerTexture.needsUpdate = true;
+        scene.remove(winnerSprite);
+
+        // Here you might want to reset the game or handle the endgame logic
+        resetGame();
+    }, 5000);
+}
+
+function resetGame() {
+    // Reset health
+    player.kills = 0;
+    enemy.kills = 0;
+    player.health = player.maxHealth;
+    enemy.health = enemy.maxHealth;
+    player.isAlive = true;
+    enemy.isAlive = true;
+
+    // Handle reset of the game scene (platforms, collectibles, etc.)
+    resetPlatformsAndCubes()
+
+    // Start the countdown again
+    startCountdown();
+
+}
 
 // ----- Animation Loop -----
 function animate() {
