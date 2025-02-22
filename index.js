@@ -207,7 +207,6 @@ class Enemy {
         this.scene = scene;
         this.world = world;
         this.player = player;
-        this.MIN_DISTANCE_TO_PLAYER = 2;
         this.health = 100;
         this.maxHealth = 100;
         this.cubeCount = 0;
@@ -348,33 +347,36 @@ class Enemy {
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
 
-        // ----- Target Selection -----
-        if (!this.currentTarget) {
+        // ----- Target Selection & Switching -----
+        // If there are collectible cubes available, always switch to targeting the nearest cube.
+        if (collectibleCubes.length > 0) {
             let candidate = null;
             let minDistance = Infinity;
             for (const cubeObj of collectibleCubes) {
-                const dist = this.mesh.position.distanceTo(cubeObj.mesh.position);
-                if (dist < minDistance) {
-                    minDistance = dist;
+                const d = this.mesh.position.distanceTo(cubeObj.mesh.position);
+                if (d < minDistance) {
+                    minDistance = d;
                     candidate = cubeObj;
                 }
             }
-            // If a collectible target exists, use it; otherwise, fallback to the player.
-            if (candidate) {
-                this.currentTarget = candidate;
-            } else {
-                this.currentTarget = { mesh: player.mesh };
-            }
+            // Switch to the cube target (even if currently targeting the player)
+            this.currentTarget = candidate;
             this.jumpAttemptsForTarget = 0;
+        } else {
+            // Fallback: if no cubes exist, target the player.
+            if (!this.currentTarget || this.currentTarget.mesh !== this.player.mesh) {
+                this.currentTarget = { mesh: this.player.mesh };
+            }
         }
 
         // ----- Target Steering -----
+        const MIN_DISTANCE_TO_PLAYER = 2;
         if (this.currentTarget) {
             const targetPos = this.currentTarget.mesh.position;
             // If the current target is the player, enforce a minimum distance.
-            if (this.currentTarget.mesh === player.mesh) {
+            if (this.currentTarget.mesh === this.player.mesh) {
                 const distanceToPlayer = this.mesh.position.distanceTo(targetPos);
-                if (distanceToPlayer < this.MIN_DISTANCE_TO_PLAYER) {
+                if (distanceToPlayer < MIN_DISTANCE_TO_PLAYER) {
                     // Too close: steer away from the player.
                     const directionAway = this.mesh.position.clone().sub(targetPos).normalize();
                     this.body.velocity.x = directionAway.x * this.speed;
@@ -430,19 +432,19 @@ class Enemy {
         }
 
         // ----- Shooting at the Player -----
-        const distanceToPlayer = this.mesh.position.distanceTo(player.mesh.position);
+        const distanceToPlayer = this.mesh.position.distanceTo(this.player.mesh.position);
         if (
             distanceToPlayer < 5 &&
             Date.now() - this.lastShotTime > this.shootCooldown
         ) {
             this.shoot();
         }
-        const playerBox = new THREE.Box3().setFromObject(player.mesh);
+        const playerBox = new THREE.Box3().setFromObject(this.player.mesh);
         this.projectiles.forEach((projectile, index) => {
             projectile.update();
             const projectileSphere = new THREE.Sphere(projectile.mesh.position, 0.15);
             if (projectileSphere.intersectsBox(playerBox)) {
-                player.takeDamage(DAMAGE_AMOUNT);
+                this.player.takeDamage(DAMAGE_AMOUNT);
                 projectile.dispose();
                 this.projectiles.splice(index, 1);
             }
