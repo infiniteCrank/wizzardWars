@@ -1,5 +1,5 @@
 import * as THREE from "three";
-
+import { OrbitControls, GLTFLoader } from "addons";
 // ----- Scene Setup -----
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
@@ -8,6 +8,28 @@ const camera = new THREE.PerspectiveCamera(
     0.1,
     1000
 );
+
+// Create Ambient Light
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // white light, intensity of 0.5
+scene.add(ambientLight);
+
+// Create Directional Light
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // white light, intensity of 1
+directionalLight.position.set(5, 10, 7); // Set the position of the light
+directionalLight.castShadow = true; // Enable shadow casting from this light
+
+// Optional: Set shadow properties (adjust as necessary)
+directionalLight.shadow.mapSize.width = 1024; // Default is 512
+directionalLight.shadow.mapSize.height = 1024; // Default is 512
+directionalLight.shadow.camera.near = 0.5; // Default is 0.5
+directionalLight.shadow.camera.far = 50; // Default is 500
+directionalLight.shadow.camera.left = -10; // Default is -10
+directionalLight.shadow.camera.right = 10; // Default is 10
+directionalLight.shadow.camera.top = 10; // Default is 10
+directionalLight.shadow.camera.bottom = -10; // Default is -10
+
+scene.add(directionalLight);
+
 let lastCallTime = null;
 let resetCallTime = false;
 const settings = {
@@ -93,18 +115,52 @@ class Player {
         this.scene = scene;
         this.world = world;
         this.isAlive = true;
-        this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        this.mesh = new THREE.Mesh(this.geometry, this.material);
-        scene.add(this.mesh);
-        this.body = new CANNON.Body({
-            mass: 1,
-            linearDamping: 0.9,
-            angularDamping: 1,
+        this.isGrounded = false;
+
+        // this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        // this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        // this.mesh = new THREE.Mesh(this.geometry, this.material);
+        // scene.add(this.mesh);
+        // this.body = new CANNON.Body({
+        //     mass: 1,
+        //     linearDamping: 0.9,
+        //     angularDamping: 1,
+        // });
+        // this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25)));
+        // this.body.position.set(0, 2.5, 0);
+        // world.addBody(this.body);
+
+        // Initialize GLTFLoader
+        const loader = new GLTFLoader();
+        loader.load("wizard.glb", (gltf) => {
+            this.mesh = gltf.scene; // Assign the loaded model to this.mesh
+            this.mesh.scale.set(0.25, 0.25, 0.25); // Scale the model if necessary
+            scene.add(this.mesh);
+
+            // Set up the physics body after the model is loaded
+            this.body = new CANNON.Body({
+                mass: 1,
+                linearDamping: 0.9,
+                angularDamping: 1,
+            });
+            this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25))); // Adjust based on your model
+            this.body.position.set(0, 2.5, 0);
+            world.addBody(this.body);
+            // ----- Camera Setup -----
+            camera.position.set(0, 2, 5);
+            camera.lookAt(this.mesh.position);
+
+            // ----- Input Handling -----
+            this.body.addEventListener("collide", (event) => {
+                if (
+                    event.body === groundBody ||
+                    (event.body.userData && event.body.userData.isPlatform)
+                ) {
+                    this.isGrounded = true;
+                }
+            });
         });
-        this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25)));
-        this.body.position.set(0, 2.5, 0);
-        world.addBody(this.body);
+
     }
     shoot() {
         if (!this.isAlive || Date.now() - this.lastShotTime < this.shootCooldown) return;
@@ -137,8 +193,13 @@ class Player {
     update(keys) {
         console.log(keys)
         if (!this.isAlive) return;
-        this.mesh.position.copy(this.body.position);
-        this.mesh.quaternion.copy(this.body.quaternion);
+        // Ensure the mesh is loaded before updating
+        if (this.mesh) {
+            this.mesh.position.copy(this.body.position);
+            this.mesh.quaternion.copy(this.body.quaternion);
+        } else {
+            return;
+        }
         const targetVelocity = new CANNON.Vec3(0, 0, 0);
         if (keys["ArrowUp"]) targetVelocity.z = -this.speed;
         if (keys["ArrowDown"]) targetVelocity.z = this.speed;
@@ -657,27 +718,13 @@ function resetPlatformsAndCubes() {
 const player = new Player(scene, world);
 const enemy = new Enemy(scene, world, player);
 
-// ----- Camera Setup -----
-camera.position.set(0, 2, 5);
-camera.lookAt(player.mesh.position);
-
-// ----- Input Handling -----
 const keys = {};
-let isGrounded = false;
-player.body.addEventListener("collide", (event) => {
-    if (
-        event.body === groundBody ||
-        (event.body.userData && event.body.userData.isPlatform)
-    ) {
-        isGrounded = true;
-    }
-});
 
 window.addEventListener("keydown", (e) => {
     keys[e.code] = true;
-    if (e.code === "Space" && isGrounded) {
+    if (e.code === "Space" && player.isGrounded) {
         player.body.velocity.y = 8; // Player jump.
-        isGrounded = false;
+        player.isGrounded = false;
     }
     if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
         player.shoot();
@@ -898,8 +945,10 @@ function animate() {
         }
     }
 
-    camera.position.copy(player.mesh.position).add(cameraOffset);
-    camera.lookAt(player.mesh.position.clone().add(cameraLookAtOffset));
+    if (player.mesh) {
+        camera.position.copy(player.mesh.position).add(cameraOffset);
+        camera.lookAt(player.mesh.position.clone().add(cameraLookAtOffset));
+    }
     renderer.render(scene, camera);
 }
 
