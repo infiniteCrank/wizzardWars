@@ -743,6 +743,11 @@ document
     .addEventListener("click", () => {
         player.activateHealthRegen();
     });
+document
+    .getElementById("coolDownButton")
+    .addEventListener("click", () => {
+        player.activateCooldownReduction();
+    });
 
 // ----- Camera Offset -----
 const cameraOffset = new THREE.Vector3(0, 2, 2);
