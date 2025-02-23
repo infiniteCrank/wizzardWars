@@ -129,6 +129,7 @@ class Player {
         this.updateHealthBar();
     }
     update(keys) {
+        console.log(keys)
         if (!this.isAlive) return;
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
@@ -137,6 +138,7 @@ class Player {
         if (keys["ArrowDown"]) targetVelocity.z = this.speed;
         if (keys["ArrowLeft"]) targetVelocity.x = -this.speed;
         if (keys["ArrowRight"]) targetVelocity.x = this.speed;
+        if (keys["KeyH"]) this.activateHealthRegen();
         if (targetVelocity.x !== 0 || targetVelocity.z !== 0) {
             const direction = new THREE.Vector3(
                 targetVelocity.x,
