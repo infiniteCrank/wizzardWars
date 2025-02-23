@@ -177,6 +177,19 @@ class Player {
             this.updateHealthBar();
         }
     }
+    activateCooldownReduction() {
+        if (this.spendCubes(10)) { // Cost of the power-up
+            this.shootCooldown /= 2; // Halve the cooldown
+            console.log("Projectile cooldown reduced!");
+            // Restore the cooldown after 10 seconds
+            setTimeout(() => {
+                this.shootCooldown *= 2; // Restore original cooldown
+                console.log("Projectile cooldown restored!");
+            }, 10000);
+        } else {
+            console.log("Not enough cubes to activate cooldown reduction!");
+        }
+    }
     removeAllProjectiles() {
         this.projectiles.forEach((projectile) => {
             projectile.dispose();
@@ -640,6 +653,9 @@ window.addEventListener("keydown", (e) => {
     }
     if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
         player.shoot();
+    }
+    if (e.code === "KeyC") {
+        player.activateCooldownReduction();
     }
 });
 
