@@ -8,6 +8,12 @@ const camera = new THREE.PerspectiveCamera(
     0.1,
     1000
 );
+let lastCallTime = null;
+let resetCallTime = false;
+const settings = {
+    stepFrequency: 60, // Set to your desired frequency
+    maxSubSteps: 3 // Adjust based on your simulation needs
+};
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -167,6 +173,8 @@ class Player {
             this.removeAllProjectiles();
             // Increment the enemy's kill count
             enemy.kills++;
+            document.getElementById("enemy-kills").innerText = "Enemy Kills: " + enemy.kills; // Update enemy kills display
+
             // Check for win condition
             if (enemy.kills >= 3) {
                 displayWinner("Enemy wins!");
@@ -282,6 +290,7 @@ class Enemy {
             this.removeAllProjectiles();
             // Increment the player's kill count
             player.kills++;
+            document.getElementById("player-kills").innerText = "Player Kills: " + player.kills; // Update player kills display
 
             // Check for win condition
             if (player.kills >= 3) {
@@ -353,6 +362,20 @@ class Enemy {
         this.updateHealthBar();
     }
 
+    activateCooldownReduction() {
+        if (this.health === this.maxHealth && this.spendCubes(10)) { // Check for full health and cost
+            this.shootCooldown /= 2; // Halve the cooldown
+            console.log("Enemy projectile cooldown reduced!");
+            // Restore the cooldown after 10 seconds
+            setTimeout(() => {
+                this.shootCooldown *= 2; // Restore original cooldown
+                console.log("Enemy projectile cooldown restored!");
+            }, 10000);
+        } else {
+            console.log("Enemy cannot activate cooldown reduction, either not at full health or not enough cubes!");
+        }
+    }
+
     // Enemy health regeneration method
     activateHealthRegen() {
         if (this.spendCubes(10)) {
@@ -379,6 +402,11 @@ class Enemy {
         // Auto health regeneration check if needed.
         if (this.health < 0.2 * this.maxHealth && this.cubeCount >= 10) {
             this.activateHealthRegen();
+        }
+
+        //auto cooldown reduction if health is full 
+        if (this.health === this.maxHealth && this.cubeCount >= 10 && Math.random() < 0.01) {
+            this.activateCooldownReduction();
         }
 
         this.mesh.position.copy(this.body.position);
@@ -816,10 +844,35 @@ function resetGame() {
 
 }
 
+function updatePhysics() {
+    // Step world
+    var timeStep = 1 / settings.stepFrequency;
+
+    var now = performance.now() / 1000;
+
+    if (!lastCallTime) {
+        // last call time not saved, can't guess elapsed time. Take a simple step.
+        world.step(timeStep);
+        lastCallTime = now;
+        return;
+    }
+
+    var timeSinceLastCall = now - lastCallTime;
+    if (resetCallTime) {
+        timeSinceLastCall = 0;
+        resetCallTime = false;
+    }
+
+    world.step(timeStep, timeSinceLastCall, settings.maxSubSteps);
+
+    lastCallTime = now;
+}
+
 // ----- Animation Loop -----
 function animate() {
     requestAnimationFrame(animate);
-    world.step(1 / 60);
+    updatePhysics(); // Call the updatePhysics function for the Cannon.js world
+
 
     // Remove bodies queued for removal.
     while (cubesToRemove.length) {
