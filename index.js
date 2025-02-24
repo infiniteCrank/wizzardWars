@@ -164,16 +164,21 @@ class Player {
     }
     shoot() {
         if (!this.isAlive || Date.now() - this.lastShotTime < this.shootCooldown) return;
-        const direction = new THREE.Vector3(0, 0, -1);
-        direction.applyQuaternion(this.mesh.quaternion);
+
+        // Get the forward direction of the player based on the player's quaternion
+        const direction = new THREE.Vector3(0, 0, -1); // Forward direction in local space
+        direction.applyQuaternion(this.mesh.quaternion); // Apply the player's rotation
+
         const newProjectile = new Projectile(
-            this.mesh.position.clone(),
+            this.mesh.position.clone().add(direction.multiplyScalar(0.5)), // Offset slightly in front of the player
             direction,
             PROJECTILE_SPEED,
             PROJECTILE_LIFETIME
         );
+
         this.projectiles.push(newProjectile);
         this.scene.add(newProjectile.mesh);
+
         // Update last shot time
         this.lastShotTime = Date.now();
     }
