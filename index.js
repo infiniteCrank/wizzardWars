@@ -758,7 +758,7 @@ createPlatforms(totalCubes);
 
 // ----- Countdown Setup -----
 // Pause game logic until the countdown finishes.
-let countdownTime = 10; // countdown in seconds
+let countdownTime = 3; // countdown in seconds
 let countdownActive = true;
 
 // Create an off-screen canvas for drawing the countdown.
@@ -807,7 +807,7 @@ const countdownInterval = setInterval(() => {
 
 // Function to start the countdown
 function startCountdown() {
-    countdownTime = 10; // Set the countdown time
+    countdownTime = 3; // Set the countdown time
     countdownActive = true; // Activate the countdown
 
     scene.add(countdownSprite); // Ensure the countdown sprite is added to the scene
