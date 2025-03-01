@@ -116,6 +116,10 @@ class Player {
         this.world = world;
         this.isAlive = true;
         this.isGrounded = false;
+        this.currentTarget = null; // To hold the target object (like the enemy)
+        this.movementSpeed = 1; // Same as enemy
+        this.jumpAttemptsForTarget = 0; // Similar to enemy's jump attempts
+
 
         // Initialize GLTFLoader
         const loader = new GLTFLoader();
@@ -148,6 +152,26 @@ class Player {
             });
         });
 
+    }
+    computeSteering(targetPos) {
+        const desired = new THREE.Vector3()
+            .subVectors(targetPos, this.mesh.position)
+            .normalize()
+            .multiplyScalar(this.movementSpeed);
+
+        let avoidance = new THREE.Vector3(0, 0, 0);
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(this.mesh.position, desired.clone());
+        const obstacleMeshes = platforms.map((ob) => ob.mesh);
+        const intersections = raycaster.intersectObjects(obstacleMeshes);
+
+        if (intersections.length > 0 && intersections[0].distance < 1.0) {
+            const normal = intersections[0].face.normal;
+            avoidance.add(normal.clone().multiplyScalar(this.movementSpeed));
+        }
+
+        const steering = desired.add(avoidance);
+        return steering.normalize().multiplyScalar(this.movementSpeed);
     }
     shoot() {
         if (!this.isAlive || Date.now() - this.lastShotTime < this.shootCooldown) return;
@@ -183,7 +207,6 @@ class Player {
         this.updateHealthBar();
     }
     update(keys) {
-        console.log(keys)
         if (!this.isAlive) return;
         // Ensure the mesh is loaded before updating
         if (this.mesh) {
@@ -192,33 +215,10 @@ class Player {
         } else {
             return;
         }
-        const targetVelocity = new CANNON.Vec3(0, 0, 0);
-        // player is now automated for movement and enemy targeting 
-        // if (keys["ArrowUp"]) targetVelocity.z = -this.speed;
-        // if (keys["ArrowDown"]) targetVelocity.z = this.speed;
-        // if (keys["ArrowLeft"]) targetVelocity.x = -this.speed;
-        // if (keys["ArrowRight"]) targetVelocity.x = this.speed;
-        // if (e.code === "Space" && player.isGrounded) {
-        //     player.body.velocity.y = 8; // Player jump.
-        //     player.isGrounded = false;
-        // }
-        // if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
-        //     player.shoot();
-        // }
 
         if (keys["KeyH"]) this.activateHealthRegen();
         if (keys["KeyC"]) this.activateCooldownReduction();
 
-        if (targetVelocity.x !== 0 || targetVelocity.z !== 0) {
-            const direction = new THREE.Vector3(
-                targetVelocity.x,
-                0,
-                targetVelocity.z
-            ).normalize();
-            this.mesh.lookAt(this.mesh.position.clone().add(direction));
-        }
-        this.body.velocity.x = targetVelocity.x;
-        this.body.velocity.z = targetVelocity.z;
         this.projectiles.forEach((projectile) => projectile.update());
         this.projectiles = this.projectiles.filter(
             (projectile) => projectile.mesh.parent !== null
