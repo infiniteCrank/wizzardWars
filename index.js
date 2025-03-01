@@ -9,8 +9,16 @@ const camera = new THREE.PerspectiveCamera(
     0.1,
     1000
 );
-// Set the camera position to view the whole scene.
+// Set the camera position to view the whole scene (adjusted closer)
 camera.position.set(4, 4, 4);
+
+// ----- Renderer & OrbitControls -----
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const orbitControls = new OrbitControls(camera, renderer.domElement);
+orbitControls.target.set(0, 0, 0);
+orbitControls.update();
 
 // Create Ambient Light
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -29,17 +37,6 @@ directionalLight.shadow.camera.right = 10;
 directionalLight.shadow.camera.top = 10;
 directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
-
-// ----- Renderer & OrbitControls -----
-// Create the renderer first.
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// Now that renderer is defined, create OrbitControls.
-const orbitControls = new OrbitControls(camera, renderer.domElement);
-orbitControls.target.set(0, 0, 0);
-orbitControls.update();
 
 let lastCallTime = null;
 let resetCallTime = false;
@@ -68,7 +65,7 @@ groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
 // ----- Global Arrays & Constants -----
-let platforms = [];          // Platforms (each now stores its collectible cube)
+let platforms = [];          // Each platform now stores its collectible cube
 let collectibleCubes = [];   // Collectible cubes available for both player & enemy
 const cubesToRemove = [];
 let totalCubes = 5;          // Total cubes per round
@@ -124,8 +121,8 @@ class Player {
         this.world = world;
         this.isAlive = true;
         this.isGrounded = false;
-        // currentTarget will be set via pointer events.
-        // For collectible cubes, the full cube object (mesh and body) with a type will be stored.
+        // currentTarget: object with { mesh, (optionally body), type }
+        // type: "collectible", "platform", or "enemy"
         this.currentTarget = null;
         this.movementSpeed = 1;
         this.jumpAttemptsForTarget = 0;
@@ -211,52 +208,49 @@ class Player {
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
 
-        // Auto–move toward collectible cubes (same as enemy AI)
-        if (this.currentTarget && this.currentTarget.type === "collectible") {
+        // ---- Auto-Movement when a target is selected ----
+        if (this.currentTarget) {
             const targetPos = this.currentTarget.mesh.position;
             const heightDiff = targetPos.y - this.mesh.position.y;
-            if (heightDiff > 0.5) {
-                if (this.jumpAttemptsForTarget < 2) {
-                    if (this.isGrounded) {
-                        this.body.velocity.y = 8;
+
+            if (this.currentTarget.type === "collectible" || this.currentTarget.type === "platform") {
+                // Jump if the target is significantly higher
+                if (heightDiff > 0.5) {
+                    if (this.jumpAttemptsForTarget < 2 && this.isGrounded) {
+                        this.body.velocity.y = 8; // Jump force
                         this.jumpAttemptsForTarget++;
                     }
                 } else {
-                    // Too many jump attempts: cancel target.
-                    collectibleCubes = collectibleCubes.filter(cubeObj => cubeObj !== this.currentTarget);
-                    this.currentTarget = null;
-                }
-            } else {
-                if (this.body.position.y > targetPos.y + 0.3) {
-                    this.jumpAttemptsForTarget = 0;
-                }
-                const steering = this.computeSteering(targetPos);
-                this.body.velocity.x = steering.x;
-                this.body.velocity.z = steering.z;
-                this.mesh.lookAt(targetPos);
-                if (this.mesh.position.distanceTo(targetPos) < 0.5) {
-                    // "Collect" the cube.
-                    scene.remove(this.currentTarget.mesh);
-                    this.currentTarget.mesh.geometry.dispose();
-                    this.currentTarget.mesh.material.dispose();
-                    world.removeBody(this.currentTarget.body);
-                    collectibleCubes = collectibleCubes.filter(cubeObj => cubeObj !== this.currentTarget);
-                    this.cubeCount++;
-                    currentRoundCubeCount++;
-                    document.getElementById("player-cubes").innerText = "Player Cubes: " + this.cubeCount;
-                    this.currentTarget = null;
-                    console.log(`Player Cubes (Round): ${currentRoundCubeCount} / ${totalCubes}`);
-                    if (currentRoundCubeCount >= totalCubes) {
-                        currentRoundCubeCount = 0;
-                        resetPlatformsAndCubes();
+                    this.jumpAttemptsForTarget = 0; // Reset jump attempt when not jumping
+                    const steering = this.computeSteering(targetPos);
+                    this.body.velocity.x = steering.x;
+                    this.body.velocity.z = steering.z;
+                    this.mesh.lookAt(targetPos);
+                    if (this.mesh.position.distanceTo(targetPos) < 0.5) {
+                        // Collect or confirm reach.
+                        // Collect or move logic here.
                     }
                 }
-                this.updateHealthBar();
-                return; // Skip manual key processing while auto–moving
+            } else if (this.currentTarget.type === "enemy") {
+                // Move towards the enemy and shoot if close enough
+                const minDistance = 2;
+                const currentDistance = this.mesh.position.distanceTo(targetPos);
+                if (currentDistance > minDistance) {
+                    const steering = this.computeSteering(targetPos);
+                    this.body.velocity.x = steering.x;
+                    this.body.velocity.z = steering.z;
+                    this.mesh.lookAt(targetPos);
+                } else {
+                    // Shoot logic
+                    if (Date.now() - this.lastShotTime > this.shootCooldown) {
+                        this.shoot();
+                    }
+                }
             }
         }
 
-        // Process manual inputs
+
+        // ---- Manual Input Processing ----
         if (keys["KeyH"]) this.activateHealthRegen();
         if (keys["KeyC"]) this.activateCooldownReduction();
 
@@ -495,6 +489,8 @@ class Enemy {
 
         // ----- Target Selection & Switching -----
         if (collectibleCubes.length > 0) {
+            console.log(collectibleCubes)
+            console.log(" I like to move it move it ")
             let candidate = null;
             let minDistance = Infinity;
             for (const cubeObj of collectibleCubes) {
@@ -504,10 +500,12 @@ class Enemy {
                     candidate = cubeObj;
                 }
             }
+            console.log(candidate)
             this.currentTarget = candidate;
             this.jumpAttemptsForTarget = 0;
         } else {
             if (!this.currentTarget || this.currentTarget.mesh !== this.player.mesh) {
+                console.log("TAGRGETING PLAYER !!!!!!!!!!");
                 this.currentTarget = { mesh: this.player.mesh };
             }
         }
@@ -516,7 +514,9 @@ class Enemy {
         const MIN_DISTANCE_TO_PLAYER = 2;
         if (this.currentTarget) {
             const targetPos = this.currentTarget.mesh.position;
+            console.log("target position = " + targetPos.x)
             if (this.currentTarget.mesh === this.player.mesh) {
+                console.log("my targetis the player!!!!!");
                 const distanceToPlayer = this.mesh.position.distanceTo(targetPos);
                 if (distanceToPlayer < MIN_DISTANCE_TO_PLAYER) {
                     const directionAway = this.mesh.position.clone().sub(targetPos).normalize();
@@ -600,7 +600,7 @@ class Enemy {
 }
 
 // ----- Platforms & Collectibles -----
-// Updated: Each platform now stores its collectible cube and cubes are made bigger.
+// Each platform now stores its collectible cube and cubes are made bigger.
 function createPlatforms(numPlatforms) {
     platforms = [];
     for (let i = 0; i < numPlatforms; i++) {
@@ -731,6 +731,7 @@ function resetPlatformsAndCubes() {
     totalCubes = 5;
     removeAllPlatforms();
     createPlatforms(totalCubes);
+    console.log("Platforms and cubes have been reset.");
 }
 
 // ----- Instantiate Player & Enemy -----
@@ -795,7 +796,7 @@ const countdownInterval = setInterval(() => {
         clearInterval(countdownInterval);
         scene.remove(countdownSprite);
         countdownActive = false;
-        // Reset platforms and cubes when the countdown is over.
+        // Reset platforms and cubes when countdown finishes.
         resetPlatformsAndCubes();
         player.respawn();
     } else {
@@ -814,7 +815,6 @@ function startCountdown() {
             clearInterval(countdownInterval);
             scene.remove(countdownSprite);
             countdownActive = false;
-            // Reset platforms and cubes before respawning the player
             resetPlatformsAndCubes();
             player.respawn();
         } else {
@@ -884,15 +884,13 @@ function onPointerDown(event) {
     raycaster.setFromCamera(mouse, camera);
 
     // Build list of targetable objects:
-    // Include collectible cubes, platforms (which will target their cube), and the enemy.
+    // Include collectible cubes, platforms (to target the platform itself), and the enemy.
     const targetableObjects = [];
     collectibleCubes.forEach(cubeObj => {
         targetableObjects.push(cubeObj.mesh);
     });
     platforms.forEach(platObj => {
-        if (platObj.cube) {
-            targetableObjects.push(platObj.mesh);
-        }
+        targetableObjects.push(platObj.mesh);
     });
     targetableObjects.push(enemy.mesh);
 
@@ -904,17 +902,17 @@ function onPointerDown(event) {
             console.log("Enemy targeted!");
             player.currentTarget = { mesh: enemy.mesh, type: "enemy" };
         } else {
-            // Check if the clicked object is a cube.
+            // Check if the clicked object is a collectible cube.
             const cubeObj = collectibleCubes.find(cubeObj => cubeObj.mesh === clickedObject);
             if (cubeObj) {
                 console.log("Collectible cube targeted!");
                 player.currentTarget = { ...cubeObj, type: "collectible" };
             } else {
-                // If not, check if it is a platform.
+                // Otherwise, if it's a platform, target the platform.
                 const platObj = platforms.find(platObj => platObj.mesh === clickedObject);
-                if (platObj && platObj.cube) {
-                    console.log("Platform clicked; targeting cube above platform!");
-                    player.currentTarget = { ...platObj.cube, type: "collectible" };
+                if (platObj) {
+                    console.log("Platform targeted!");
+                    player.currentTarget = { mesh: platObj.mesh, type: "platform" };
                 }
             }
         }
@@ -998,8 +996,6 @@ function animate() {
     }
 
     updateTargetIndicator();
-
-    // OrbitControls handle camera movement.
     orbitControls.update();
     renderer.render(scene, camera);
 }
