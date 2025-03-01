@@ -58,7 +58,7 @@ groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
 // ----- Global Arrays & Constants -----
-let platforms = [];          // For enemy obstacle avoidance
+let platforms = [];          // Platforms (each now stores its collectible cube)
 let collectibleCubes = [];   // Collectible cubes available for both player & enemy
 const cubesToRemove = [];
 let totalCubes = 5;          // Total cubes per round
@@ -204,7 +204,7 @@ class Player {
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
 
-        // If the current target is a collectible cube, auto move toward it
+        // Auto–move toward collectible cubes (same as enemy AI)
         if (this.currentTarget && this.currentTarget.type === "collectible") {
             const targetPos = this.currentTarget.mesh.position;
             const heightDiff = targetPos.y - this.mesh.position.y;
@@ -249,7 +249,7 @@ class Player {
             }
         }
 
-        // Process manual inputs (if not auto–moving to a collectible)
+        // Process manual inputs
         if (keys["KeyH"]) this.activateHealthRegen();
         if (keys["KeyC"]) this.activateCooldownReduction();
 
@@ -593,6 +593,7 @@ class Enemy {
 }
 
 // ----- Platforms & Collectibles -----
+// Updated: Each platform now stores its collectible cube and cubes are made bigger.
 function createPlatforms(numPlatforms) {
     platforms = [];
     for (let i = 0; i < numPlatforms; i++) {
@@ -640,10 +641,11 @@ function createPlatforms(numPlatforms) {
         );
         platformBody.position.copy(platform.position);
         world.addBody(platformBody);
-        platforms.push({ mesh: platform, body: platformBody });
+        // Create a platform object that will store its cube
+        const platformObj = { mesh: platform, body: platformBody };
 
-        // Create a collectible cube on the platform.
-        const cubeSize = 0.3;
+        // Create a larger collectible cube on the platform.
+        const cubeSize = 0.5;
         const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
         const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
         const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
@@ -660,8 +662,12 @@ function createPlatforms(numPlatforms) {
         cubeBody.position.copy(cube.position);
         world.addBody(cubeBody);
         cubeBody.userData = { isCollectible: true, mesh: cube };
-        // When the cube collides with the player, auto–collect it.
-        collectibleCubes.push({ mesh: cube, body: cubeBody });
+        // Attach the cube to the platform object.
+        platformObj.cube = { mesh: cube, body: cubeBody };
+        platforms.push(platformObj);
+        collectibleCubes.push(platformObj.cube);
+
+        // Listen for collisions (if the player runs into the cube)
         cubeBody.addEventListener("collide", async (event) => {
             if (event.body === player.body && cubeBody.userData.isCollectible) {
                 cubeBody.userData.isCollectible = false;
@@ -859,6 +865,7 @@ function resetGame() {
 }
 
 // ----- Targeting via Pointer Events & Visual Cue -----
+// Global variable for the visual cue (a yellow ring)
 let targetIndicator = null;
 
 window.addEventListener("pointerdown", onPointerDown, false);
@@ -871,10 +878,16 @@ function onPointerDown(event) {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, camera);
 
-    // Build list of targetable objects: collectible cubes and enemy.
+    // Build list of targetable objects:
+    // Include collectible cubes, platforms (which will target their cube), and the enemy.
     const targetableObjects = [];
     collectibleCubes.forEach(cubeObj => {
         targetableObjects.push(cubeObj.mesh);
+    });
+    platforms.forEach(platObj => {
+        if (platObj.cube) {
+            targetableObjects.push(platObj.mesh);
+        }
     });
     targetableObjects.push(enemy.mesh);
 
@@ -886,11 +899,18 @@ function onPointerDown(event) {
             console.log("Enemy targeted!");
             player.currentTarget = { mesh: enemy.mesh, type: "enemy" };
         } else {
-            console.log("Collectible cube targeted!");
-            // Find the cube object from collectibleCubes and store the full object with type.
+            // Check if the clicked object is a cube.
             const cubeObj = collectibleCubes.find(cubeObj => cubeObj.mesh === clickedObject);
             if (cubeObj) {
+                console.log("Collectible cube targeted!");
                 player.currentTarget = { ...cubeObj, type: "collectible" };
+            } else {
+                // If not, check if it is a platform.
+                const platObj = platforms.find(platObj => platObj.mesh === clickedObject);
+                if (platObj && platObj.cube) {
+                    console.log("Platform clicked; targeting cube above platform!");
+                    player.currentTarget = { ...platObj.cube, type: "collectible" };
+                }
             }
         }
     } else {
