@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls, GLTFLoader } from "addons";
+
 // ----- Scene Setup -----
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
@@ -15,26 +16,23 @@ scene.add(ambientLight);
 
 // Create Directional Light
 const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // white light, intensity of 1
-directionalLight.position.set(5, 10, 7); // Set the position of the light
-directionalLight.castShadow = true; // Enable shadow casting from this light
-
-// Optional: Set shadow properties (adjust as necessary)
-directionalLight.shadow.mapSize.width = 1024; // Default is 512
-directionalLight.shadow.mapSize.height = 1024; // Default is 512
-directionalLight.shadow.camera.near = 0.5; // Default is 0.5
-directionalLight.shadow.camera.far = 50; // Default is 500
-directionalLight.shadow.camera.left = -10; // Default is -10
-directionalLight.shadow.camera.right = 10; // Default is 10
-directionalLight.shadow.camera.top = 10; // Default is 10
-directionalLight.shadow.camera.bottom = -10; // Default is -10
-
+directionalLight.position.set(5, 10, 7);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 1024;
+directionalLight.shadow.mapSize.height = 1024;
+directionalLight.shadow.camera.near = 0.5;
+directionalLight.shadow.camera.far = 50;
+directionalLight.shadow.camera.left = -10;
+directionalLight.shadow.camera.right = 10;
+directionalLight.shadow.camera.top = 10;
+directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
 let lastCallTime = null;
 let resetCallTime = false;
 const settings = {
-    stepFrequency: 60, // Set to your desired frequency
-    maxSubSteps: 3 // Adjust based on your simulation needs
+    stepFrequency: 60,
+    maxSubSteps: 3
 };
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -106,7 +104,7 @@ class Player {
     constructor(scene, world) {
         this.health = 100;
         this.maxHealth = 100;
-        this.kills = 0;  // Track the number of kills
+        this.kills = 0;
         this.projectiles = [];
         this.shootCooldown = 1000;
         this.lastShotTime = 0;
@@ -116,32 +114,29 @@ class Player {
         this.world = world;
         this.isAlive = true;
         this.isGrounded = false;
-        this.currentTarget = null; // To hold the target object (like the enemy)
-        this.movementSpeed = 1; // Same as enemy
-        this.jumpAttemptsForTarget = 0; // Similar to enemy's jump attempts
+        // currentTarget will be set via pointer events
+        this.currentTarget = null;
+        this.movementSpeed = 1;
+        this.jumpAttemptsForTarget = 0;
 
-
-        // Initialize GLTFLoader
         const loader = new GLTFLoader();
         loader.load("wizard.glb", (gltf) => {
-            this.mesh = gltf.scene; // Assign the loaded model to this.mesh
-            this.mesh.scale.set(0.25, 0.25, 0.25); // Scale the model if necessary
+            this.mesh = gltf.scene;
+            this.mesh.scale.set(0.25, 0.25, 0.25);
             scene.add(this.mesh);
 
-            // Set up the physics body after the model is loaded
             this.body = new CANNON.Body({
                 mass: 1,
                 linearDamping: 0.9,
                 angularDamping: 1,
             });
-            this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25))); // Adjust based on your model
+            this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25)));
             this.body.position.set(0, 2.5, 0);
             world.addBody(this.body);
-            // ----- Camera Setup -----
+
             camera.position.set(0, 2, 5);
             camera.lookAt(this.mesh.position);
 
-            // ----- Input Handling -----
             this.body.addEventListener("collide", (event) => {
                 if (
                     event.body === groundBody ||
@@ -151,7 +146,6 @@ class Player {
                 }
             });
         });
-
     }
     computeSteering(targetPos) {
         const desired = new THREE.Vector3()
@@ -176,12 +170,11 @@ class Player {
     shoot() {
         if (!this.isAlive || Date.now() - this.lastShotTime < this.shootCooldown) return;
 
-        // Get the forward direction of the player based on the player's quaternion
-        const direction = new THREE.Vector3(0, 0, -1); // Forward direction in local space
-        direction.applyQuaternion(this.mesh.quaternion); // Apply the player's rotation
+        const direction = new THREE.Vector3(0, 0, -1);
+        direction.applyQuaternion(this.mesh.quaternion);
 
         const newProjectile = new Projectile(
-            this.mesh.position.clone().add(direction.multiplyScalar(0.5)), // Offset slightly in front of the player
+            this.mesh.position.clone().add(direction.multiplyScalar(0.5)),
             direction,
             PROJECTILE_SPEED,
             PROJECTILE_LIFETIME
@@ -189,8 +182,6 @@ class Player {
 
         this.projectiles.push(newProjectile);
         this.scene.add(newProjectile.mesh);
-
-        // Update last shot time
         this.lastShotTime = Date.now();
     }
     respawn() {
@@ -208,7 +199,6 @@ class Player {
     }
     update(keys) {
         if (!this.isAlive) return;
-        // Ensure the mesh is loaded before updating
         if (this.mesh) {
             this.mesh.position.copy(this.body.position);
             this.mesh.quaternion.copy(this.body.quaternion);
@@ -235,27 +225,23 @@ class Player {
             this.scene.remove(this.mesh);
             this.world.removeBody(this.body);
             this.removeAllProjectiles();
-            // Increment the enemy's kill count
             enemy.kills++;
-            document.getElementById("enemy-kills").innerText = "Enemy Kills: " + enemy.kills; // Update enemy kills display
-
-            // Check for win condition
+            document.getElementById("enemy-kills").innerText = "Enemy Kills: " + enemy.kills;
             if (enemy.kills >= 3) {
                 displayWinner("Enemy wins!");
                 return;
             }
-            setTimeout(() => this.respawn(), 10000); // Respawn after 10 sec
+            setTimeout(() => this.respawn(), 10000);
         } else {
             this.updateHealthBar();
         }
     }
     activateCooldownReduction() {
-        if (this.spendCubes(10)) { // Cost of the power-up
-            this.shootCooldown /= 2; // Halve the cooldown
+        if (this.spendCubes(10)) {
+            this.shootCooldown /= 2;
             console.log("Projectile cooldown reduced!");
-            // Restore the cooldown after 10 seconds
             setTimeout(() => {
-                this.shootCooldown *= 2; // Restore original cooldown
+                this.shootCooldown *= 2;
                 console.log("Projectile cooldown restored!");
             }, 10000);
         } else {
@@ -278,10 +264,9 @@ class Player {
         }
     }
     activateHealthRegen() {
-        if (this.spendCubes(10)) { // Cost of the power-up
+        if (this.spendCubes(10)) {
             this.health = Math.min(this.health + this.maxHealth / 2, this.maxHealth);
             this.updateHealthBar();
-            // Update the cube display after spending cubes
             const cubeDisplay = document.getElementById("player-cubes");
             if (cubeDisplay) {
                 cubeDisplay.innerText = "Player Cubes: " + this.cubeCount;
@@ -309,9 +294,8 @@ class Enemy {
         this.health = 100;
         this.maxHealth = 100;
         this.cubeCount = 0;
-        this.kills = 0;  // Track the number of kills
+        this.kills = 0;
         this.projectiles = [];
-        // This variable controls the enemy's movement speed.
         this.movementSpeed = 1;
         this.isAlive = true;
         this.shootCooldown = 1000;
@@ -341,7 +325,6 @@ class Enemy {
         this.jumpAttemptsForTarget = 0;
         this.updateHealthBar();
     }
-
     takeDamage(amount) {
         if (!this.isAlive) return;
         this.health -= amount;
@@ -352,11 +335,8 @@ class Enemy {
             this.scene.remove(this.mesh);
             this.world.removeBody(this.body);
             this.removeAllProjectiles();
-            // Increment the player's kill count
             player.kills++;
-            document.getElementById("player-kills").innerText = "Player Kills: " + player.kills; // Update player kills display
-
-            // Check for win condition
+            document.getElementById("player-kills").innerText = "Player Kills: " + player.kills;
             if (player.kills >= 3) {
                 displayWinner("Player Wins!");
                 return;
@@ -366,7 +346,6 @@ class Enemy {
             this.updateHealthBar();
         }
     }
-
     updateHealthBar() {
         const enemyHealthBar = document.getElementById("enemy-health-bar");
         if (enemyHealthBar && this.health > 0) {
@@ -376,7 +355,6 @@ class Enemy {
                 healthPercentage < 30 ? "red" : "green";
         }
     }
-
     computeSteering(targetPos) {
         const desired = new THREE.Vector3()
             .subVectors(targetPos, this.mesh.position)
@@ -394,7 +372,6 @@ class Enemy {
         const steering = desired.add(avoidance);
         return steering.normalize().multiplyScalar(this.movementSpeed);
     }
-
     shoot() {
         if (!this.isAlive) return;
         const direction = new THREE.Vector3()
@@ -411,7 +388,6 @@ class Enemy {
         this.scene.add(enemyProjectile.mesh);
         this.lastShotTime = Date.now();
     }
-
     respawn() {
         this.health = this.maxHealth;
         this.isAlive = true;
@@ -425,22 +401,18 @@ class Enemy {
         console.log("Enemy has respawned!");
         this.updateHealthBar();
     }
-
     activateCooldownReduction() {
-        if (this.health === this.maxHealth && this.spendCubes(10)) { // Check for full health and cost
-            this.shootCooldown /= 2; // Halve the cooldown
+        if (this.health === this.maxHealth && this.spendCubes(10)) {
+            this.shootCooldown /= 2;
             console.log("Enemy projectile cooldown reduced!");
-            // Restore the cooldown after 10 seconds
             setTimeout(() => {
-                this.shootCooldown *= 2; // Restore original cooldown
+                this.shootCooldown *= 2;
                 console.log("Enemy projectile cooldown restored!");
             }, 10000);
         } else {
             console.log("Enemy cannot activate cooldown reduction, either not at full health or not enough cubes!");
         }
     }
-
-    // Enemy health regeneration method
     activateHealthRegen() {
         if (this.spendCubes(10)) {
             this.health = Math.min(this.health + this.maxHealth / 2, this.maxHealth);
@@ -450,8 +422,6 @@ class Enemy {
             console.log("Enemy does not have enough cubes to regenerate health!");
         }
     }
-
-    // Helper method to spend cubes
     spendCubes(amount) {
         if (this.cubeCount >= amount) {
             this.cubeCount -= amount;
@@ -459,16 +429,12 @@ class Enemy {
         }
         return false;
     }
-
     update() {
         if (!this.isAlive) return;
 
-        // Auto health regeneration check if needed.
         if (this.health < 0.2 * this.maxHealth && this.cubeCount >= 10) {
             this.activateHealthRegen();
         }
-
-        //auto cooldown reduction if health is full 
         if (this.health === this.maxHealth && this.cubeCount >= 10 && Math.random() < 0.01) {
             this.activateCooldownReduction();
         }
@@ -477,7 +443,6 @@ class Enemy {
         this.mesh.quaternion.copy(this.body.quaternion);
 
         // ----- Target Selection & Switching -----
-        // If there are collectible cubes available, always switch to targeting the nearest cube.
         if (collectibleCubes.length > 0) {
             let candidate = null;
             let minDistance = Infinity;
@@ -488,11 +453,9 @@ class Enemy {
                     candidate = cubeObj;
                 }
             }
-            // Switch to the cube target (even if currently targeting the player)
             this.currentTarget = candidate;
             this.jumpAttemptsForTarget = 0;
         } else {
-            // Fallback: if no cubes exist, target the player.
             if (!this.currentTarget || this.currentTarget.mesh !== this.player.mesh) {
                 this.currentTarget = { mesh: this.player.mesh };
             }
@@ -502,24 +465,20 @@ class Enemy {
         const MIN_DISTANCE_TO_PLAYER = 2;
         if (this.currentTarget) {
             const targetPos = this.currentTarget.mesh.position;
-            // If the current target is the player, enforce a minimum distance.
             if (this.currentTarget.mesh === this.player.mesh) {
                 const distanceToPlayer = this.mesh.position.distanceTo(targetPos);
                 if (distanceToPlayer < MIN_DISTANCE_TO_PLAYER) {
-                    // Too close: steer away from the player.
                     const directionAway = this.mesh.position.clone().sub(targetPos).normalize();
                     this.body.velocity.x = directionAway.x * this.movementSpeed;
                     this.body.velocity.z = directionAway.z * this.movementSpeed;
                     this.mesh.lookAt(targetPos);
                 } else {
-                    // Not too close: approach the player normally.
                     const steering = this.computeSteering(targetPos);
                     this.body.velocity.x = steering.x;
                     this.body.velocity.z = steering.z;
                     this.mesh.lookAt(targetPos);
                 }
             } else {
-                // When targeting a collectible cube.
                 const heightDiff = targetPos.y - this.mesh.position.y;
                 if (heightDiff > 0.5) {
                     if (this.jumpAttemptsForTarget < 2) {
@@ -540,7 +499,6 @@ class Enemy {
                     this.body.velocity.z = steering.z;
                     this.mesh.lookAt(targetPos);
                     if (this.mesh.position.distanceTo(targetPos) < 0.5) {
-                        // "Collect" the cube.
                         scene.remove(this.currentTarget.mesh);
                         this.currentTarget.mesh.geometry.dispose();
                         this.currentTarget.mesh.material.dispose();
@@ -582,7 +540,6 @@ class Enemy {
             (proj) => proj.mesh.parent !== null
         );
     }
-
     removeAllProjectiles() {
         this.projectiles.forEach((projectile) => {
             projectile.dispose();
@@ -640,6 +597,7 @@ function createPlatforms(numPlatforms) {
         platformBody.position.copy(platform.position);
         world.addBody(platformBody);
         platforms.push({ mesh: platform, body: platformBody });
+
         // Create a collectible cube on the platform.
         const cubeSize = 0.3;
         const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
@@ -726,11 +684,11 @@ const keys = {};
 window.addEventListener("keydown", (e) => {
     keys[e.code] = true;
 });
-
 window.addEventListener("keyup", (e) => {
     keys[e.code] = false;
 });
 
+// ----- UI Buttons -----
 document
     .getElementById("healthRegenButton")
     .addEventListener("click", () => {
@@ -750,17 +708,12 @@ const cameraLookAtOffset = new THREE.Vector3(0, 1, 0);
 createPlatforms(totalCubes);
 
 // ----- Countdown Setup -----
-// Pause game logic until the countdown finishes.
-let countdownTime = 3; // countdown in seconds
+let countdownTime = 3;
 let countdownActive = true;
-
-// Create an off-screen canvas for drawing the countdown.
 const countdownCanvas = document.createElement("canvas");
 countdownCanvas.width = 512;
 countdownCanvas.height = 512;
 const countdownContext = countdownCanvas.getContext("2d");
-
-// Create a texture from the canvas and use it on a sprite.
 const countdownTexture = new THREE.CanvasTexture(countdownCanvas);
 const countdownMaterial = new THREE.SpriteMaterial({
     map: countdownTexture,
@@ -771,7 +724,6 @@ countdownSprite.scale.set(5, 5, 1);
 countdownSprite.position.set(0, 2, 0);
 scene.add(countdownSprite);
 
-// Function to update the countdown canvas.
 function updateCountdown() {
     countdownContext.clearRect(0, 0, countdownCanvas.width, countdownCanvas.height);
     countdownContext.font = "bold 100px Arial";
@@ -785,7 +737,6 @@ function updateCountdown() {
     );
     countdownTexture.needsUpdate = true;
 }
-
 updateCountdown();
 const countdownInterval = setInterval(() => {
     countdownTime--;
@@ -798,34 +749,29 @@ const countdownInterval = setInterval(() => {
     }
 }, 1000);
 
-// Function to start the countdown
 function startCountdown() {
-    countdownTime = 3; // Set the countdown time
-    countdownActive = true; // Activate the countdown
-
-    scene.add(countdownSprite); // Ensure the countdown sprite is added to the scene
-    updateCountdown(); // Draw initial countdown number
-
+    countdownTime = 3;
+    countdownActive = true;
+    scene.add(countdownSprite);
+    updateCountdown();
     const countdownInterval = setInterval(() => {
         countdownTime--;
         if (countdownTime <= 0) {
             clearInterval(countdownInterval);
             scene.remove(countdownSprite);
             countdownActive = false;
-            player.respawn()
+            player.respawn();
         } else {
             updateCountdown();
         }
     }, 1000);
 }
-// ----- winner screen -----
-// Create a canvas for displaying the winner's message
+
+// ----- Winner Screen -----
 const winnerCanvas = document.createElement("canvas");
 winnerCanvas.width = 512;
 winnerCanvas.height = 512;
 const winnerContext = winnerCanvas.getContext("2d");
-
-// Create a texture from the canvas and use it on a sprite.
 const winnerTexture = new THREE.CanvasTexture(winnerCanvas);
 const winnerMaterial = new THREE.SpriteMaterial({
     map: winnerTexture,
@@ -837,87 +783,127 @@ winnerSprite.position.set(0, 2, 0);
 scene.add(winnerSprite);
 
 function displayWinner(winnerText) {
-    // Clear the canvas
     winnerContext.clearRect(0, 0, winnerCanvas.width, winnerCanvas.height);
-
-    // Set font and styles
     winnerContext.font = "bold 50px Arial";
     winnerContext.fillStyle = "white";
     winnerContext.textAlign = "center";
     winnerContext.textBaseline = "middle";
-
-    // Draw text
     winnerContext.fillText(winnerText, winnerCanvas.width / 2, winnerCanvas.height / 2);
-
-    // Mark texture for update
     winnerTexture.needsUpdate = true;
-
-    // Ensure the sprite is in the scene
     if (!scene.children.includes(winnerSprite)) {
         scene.add(winnerSprite);
     }
-
-    // Optionally pause game logic
-    countdownActive = true; // Prevent further game play
-
-    // Set timeout to clear winner display after a delay
+    countdownActive = true;
     setTimeout(() => {
-        // Clear the winner message
         winnerContext.clearRect(0, 0, winnerCanvas.width, winnerCanvas.height);
         winnerTexture.needsUpdate = true;
         scene.remove(winnerSprite);
-
-        // Here you might want to reset the game or handle the endgame logic
         resetGame();
     }, 5000);
 }
 
 function resetGame() {
-    // Reset health
     player.kills = 0;
     enemy.kills = 0;
     player.health = player.maxHealth;
     enemy.health = enemy.maxHealth;
     player.isAlive = true;
     enemy.isAlive = true;
-
-    // Handle reset of the game scene (platforms, collectibles, etc.)
-    resetPlatformsAndCubes()
-
-    // Start the countdown again
+    resetPlatformsAndCubes();
     startCountdown();
-
 }
 
+// ----- Targeting via Pointer Events -----
+// Global variable for the visual cue (a yellow ring)
+let targetIndicator = null;
+
+window.addEventListener("pointerdown", onPointerDown, false);
+
+function onPointerDown(event) {
+    const mouse = new THREE.Vector2();
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+
+    // Build list of targetable objects: collectible cubes and enemy.
+    const targetableObjects = [];
+    collectibleCubes.forEach(cubeObj => {
+        targetableObjects.push(cubeObj.mesh);
+    });
+    targetableObjects.push(enemy.mesh);
+
+    const intersects = raycaster.intersectObjects(targetableObjects, false);
+
+    if (intersects.length > 0) {
+        const clickedObject = intersects[0].object;
+        if (clickedObject === enemy.mesh) {
+            console.log("Enemy targeted!");
+            player.currentTarget = { mesh: enemy.mesh, type: "enemy" };
+        } else {
+            console.log("Collectible cube targeted!");
+            const cubeObj = collectibleCubes.find(cubeObj => cubeObj.mesh === clickedObject);
+            if (cubeObj) {
+                player.currentTarget = { mesh: cubeObj.mesh, type: "collectible" };
+            }
+        }
+    } else {
+        // If nothing is clicked, clear the target.
+        player.currentTarget = null;
+    }
+    updateTargetIndicator();
+}
+
+// Create or update the target visual cue.
+function updateTargetIndicator() {
+    if (player.currentTarget) {
+        if (!targetIndicator) {
+            const ringGeometry = new THREE.RingGeometry(0.35, 0.4, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffff00,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.7,
+            });
+            targetIndicator = new THREE.Mesh(ringGeometry, ringMaterial);
+            targetIndicator.rotation.x = -Math.PI / 2;
+            scene.add(targetIndicator);
+        }
+        targetIndicator.position.copy(player.currentTarget.mesh.position);
+        targetIndicator.position.y += 0.05;
+    } else {
+        if (targetIndicator) {
+            scene.remove(targetIndicator);
+            targetIndicator.geometry.dispose();
+            targetIndicator.material.dispose();
+            targetIndicator = null;
+        }
+    }
+}
+
+// ----- Physics Update -----
 function updatePhysics() {
-    // Step world
-    var timeStep = 1 / settings.stepFrequency;
-
-    var now = performance.now() / 1000;
-
+    const timeStep = 1 / settings.stepFrequency;
+    const now = performance.now() / 1000;
     if (!lastCallTime) {
-        // last call time not saved, can't guess elapsed time. Take a simple step.
         world.step(timeStep);
         lastCallTime = now;
         return;
     }
-
-    var timeSinceLastCall = now - lastCallTime;
+    let timeSinceLastCall = now - lastCallTime;
     if (resetCallTime) {
         timeSinceLastCall = 0;
         resetCallTime = false;
     }
-
     world.step(timeStep, timeSinceLastCall, settings.maxSubSteps);
-
     lastCallTime = now;
 }
 
 // ----- Animation Loop -----
 function animate() {
     requestAnimationFrame(animate);
-    updatePhysics(); // Call the updatePhysics function for the Cannon.js world
-
+    updatePhysics();
 
     // Remove bodies queued for removal.
     while (cubesToRemove.length) {
@@ -925,12 +911,10 @@ function animate() {
         world.removeBody(bodyToRemove);
     }
 
-    // Update game logic only if countdown is finished.
     if (!countdownActive) {
         player.update(keys);
         enemy.update();
 
-        // Check collisions for player's projectiles hitting the enemy.
         const enemyBox = new THREE.Box3().setFromObject(enemy.mesh);
         for (let i = player.projectiles.length - 1; i >= 0; i--) {
             const proj = player.projectiles[i];
@@ -942,6 +926,9 @@ function animate() {
             }
         }
     }
+
+    // Update the target indicator so it follows the current target.
+    updateTargetIndicator();
 
     if (player.mesh) {
         camera.position.copy(player.mesh.position).add(cameraOffset);
