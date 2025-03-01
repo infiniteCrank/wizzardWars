@@ -11,11 +11,11 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 // Create Ambient Light
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // white light, intensity of 0.5
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
 // Create Directional Light
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // white light, intensity of 1
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 directionalLight.position.set(5, 10, 7);
 directionalLight.castShadow = true;
 directionalLight.shadow.mapSize.width = 1024;
@@ -59,7 +59,7 @@ world.addBody(groundBody);
 
 // ----- Global Arrays & Constants -----
 let platforms = [];          // For enemy obstacle avoidance
-let collectibleCubes = [];   // Cubes available for both player & enemy
+let collectibleCubes = [];   // Collectible cubes available for both player & enemy
 const cubesToRemove = [];
 let totalCubes = 5;          // Total cubes per round
 let currentRoundCubeCount = 0; // Current round cube counter
@@ -114,7 +114,8 @@ class Player {
         this.world = world;
         this.isAlive = true;
         this.isGrounded = false;
-        // currentTarget will be set via pointer events
+        // currentTarget will be set via pointer events.
+        // For collectible cubes, the full cube object (mesh and body) with a type will be stored.
         this.currentTarget = null;
         this.movementSpeed = 1;
         this.jumpAttemptsForTarget = 0;
@@ -199,13 +200,56 @@ class Player {
     }
     update(keys) {
         if (!this.isAlive) return;
-        if (this.mesh) {
-            this.mesh.position.copy(this.body.position);
-            this.mesh.quaternion.copy(this.body.quaternion);
-        } else {
-            return;
+        if (!this.mesh) return;
+        this.mesh.position.copy(this.body.position);
+        this.mesh.quaternion.copy(this.body.quaternion);
+
+        // If the current target is a collectible cube, auto move toward it
+        if (this.currentTarget && this.currentTarget.type === "collectible") {
+            const targetPos = this.currentTarget.mesh.position;
+            const heightDiff = targetPos.y - this.mesh.position.y;
+            if (heightDiff > 0.5) {
+                if (this.jumpAttemptsForTarget < 2) {
+                    if (this.isGrounded) {
+                        this.body.velocity.y = 8;
+                        this.jumpAttemptsForTarget++;
+                    }
+                } else {
+                    // Too many jump attempts: cancel target.
+                    collectibleCubes = collectibleCubes.filter(cubeObj => cubeObj !== this.currentTarget);
+                    this.currentTarget = null;
+                }
+            } else {
+                if (this.body.position.y > targetPos.y + 0.3) {
+                    this.jumpAttemptsForTarget = 0;
+                }
+                const steering = this.computeSteering(targetPos);
+                this.body.velocity.x = steering.x;
+                this.body.velocity.z = steering.z;
+                this.mesh.lookAt(targetPos);
+                if (this.mesh.position.distanceTo(targetPos) < 0.5) {
+                    // "Collect" the cube.
+                    scene.remove(this.currentTarget.mesh);
+                    this.currentTarget.mesh.geometry.dispose();
+                    this.currentTarget.mesh.material.dispose();
+                    world.removeBody(this.currentTarget.body);
+                    collectibleCubes = collectibleCubes.filter(cubeObj => cubeObj !== this.currentTarget);
+                    this.cubeCount++;
+                    currentRoundCubeCount++;
+                    document.getElementById("player-cubes").innerText = "Player Cubes: " + this.cubeCount;
+                    this.currentTarget = null;
+                    console.log(`Player Cubes (Round): ${currentRoundCubeCount} / ${totalCubes}`);
+                    if (currentRoundCubeCount >= totalCubes) {
+                        currentRoundCubeCount = 0;
+                        resetPlatformsAndCubes();
+                    }
+                }
+                this.updateHealthBar();
+                return; // Skip manual key processing while auto–moving
+            }
         }
 
+        // Process manual inputs (if not auto–moving to a collectible)
         if (keys["KeyH"]) this.activateHealthRegen();
         if (keys["KeyC"]) this.activateCooldownReduction();
 
@@ -616,6 +660,7 @@ function createPlatforms(numPlatforms) {
         cubeBody.position.copy(cube.position);
         world.addBody(cubeBody);
         cubeBody.userData = { isCollectible: true, mesh: cube };
+        // When the cube collides with the player, auto–collect it.
         collectibleCubes.push({ mesh: cube, body: cubeBody });
         cubeBody.addEventListener("collide", async (event) => {
             if (event.body === player.body && cubeBody.userData.isCollectible) {
@@ -813,8 +858,7 @@ function resetGame() {
     startCountdown();
 }
 
-// ----- Targeting via Pointer Events -----
-// Global variable for the visual cue (a yellow ring)
+// ----- Targeting via Pointer Events & Visual Cue -----
 let targetIndicator = null;
 
 window.addEventListener("pointerdown", onPointerDown, false);
@@ -843,9 +887,10 @@ function onPointerDown(event) {
             player.currentTarget = { mesh: enemy.mesh, type: "enemy" };
         } else {
             console.log("Collectible cube targeted!");
+            // Find the cube object from collectibleCubes and store the full object with type.
             const cubeObj = collectibleCubes.find(cubeObj => cubeObj.mesh === clickedObject);
             if (cubeObj) {
-                player.currentTarget = { mesh: cubeObj.mesh, type: "collectible" };
+                player.currentTarget = { ...cubeObj, type: "collectible" };
             }
         }
     } else {
@@ -927,7 +972,6 @@ function animate() {
         }
     }
 
-    // Update the target indicator so it follows the current target.
     updateTargetIndicator();
 
     if (player.mesh) {
