@@ -10,12 +10,7 @@ const camera = new THREE.PerspectiveCamera(
     1000
 );
 // Set the camera position to view the whole scene.
-camera.position.set(10, 10, 10);
-
-// Create OrbitControls for the camera.
-const controls = new OrbitControls(camera, renderer.domElement); // We will create renderer below, so instantiate later.
-controls.target.set(0, 0, 0);
-controls.update();
+camera.position.set(4, 4, 4);
 
 // Create Ambient Light
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -35,20 +30,23 @@ directionalLight.shadow.camera.top = 10;
 directionalLight.shadow.camera.bottom = -10;
 scene.add(directionalLight);
 
+// ----- Renderer & OrbitControls -----
+// Create the renderer first.
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Now that renderer is defined, create OrbitControls.
+const orbitControls = new OrbitControls(camera, renderer.domElement);
+orbitControls.target.set(0, 0, 0);
+orbitControls.update();
+
 let lastCallTime = null;
 let resetCallTime = false;
 const settings = {
     stepFrequency: 60,
     maxSubSteps: 3
 };
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// Now that renderer is defined, we can re-instantiate OrbitControls.
-const orbitControls = new OrbitControls(camera, renderer.domElement);
-orbitControls.target.set(0, 0, 0);
-orbitControls.update();
 
 // ----- Physics World -----
 const world = new CANNON.World();
@@ -147,7 +145,6 @@ class Player {
             this.body.position.set(0, 2.5, 0);
             world.addBody(this.body);
 
-            // No longer updating camera based on player position.
             this.body.addEventListener("collide", (event) => {
                 if (
                     event.body === groundBody ||
@@ -761,9 +758,6 @@ document
         player.activateCooldownReduction();
     });
 
-// ----- Create Initial Platforms -----
-createPlatforms(totalCubes);
-
 // ----- Countdown Setup -----
 let countdownTime = 3;
 let countdownActive = true;
@@ -801,6 +795,9 @@ const countdownInterval = setInterval(() => {
         clearInterval(countdownInterval);
         scene.remove(countdownSprite);
         countdownActive = false;
+        // Reset platforms and cubes when the countdown is over.
+        resetPlatformsAndCubes();
+        player.respawn();
     } else {
         updateCountdown();
     }
@@ -817,6 +814,8 @@ function startCountdown() {
             clearInterval(countdownInterval);
             scene.remove(countdownSprite);
             countdownActive = false;
+            // Reset platforms and cubes before respawning the player
+            resetPlatformsAndCubes();
             player.respawn();
         } else {
             updateCountdown();
@@ -1000,7 +999,7 @@ function animate() {
 
     updateTargetIndicator();
 
-    // OrbitControls handle camera movement; no need to update camera based on player.
+    // OrbitControls handle camera movement.
     orbitControls.update();
     renderer.render(scene, camera);
 }
