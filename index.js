@@ -9,6 +9,13 @@ const camera = new THREE.PerspectiveCamera(
     0.1,
     1000
 );
+// Set the camera position to view the whole scene.
+camera.position.set(10, 10, 10);
+
+// Create OrbitControls for the camera.
+const controls = new OrbitControls(camera, renderer.domElement); // We will create renderer below, so instantiate later.
+controls.target.set(0, 0, 0);
+controls.update();
 
 // Create Ambient Light
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -37,6 +44,11 @@ const settings = {
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+
+// Now that renderer is defined, we can re-instantiate OrbitControls.
+const orbitControls = new OrbitControls(camera, renderer.domElement);
+orbitControls.target.set(0, 0, 0);
+orbitControls.update();
 
 // ----- Physics World -----
 const world = new CANNON.World();
@@ -135,9 +147,7 @@ class Player {
             this.body.position.set(0, 2.5, 0);
             world.addBody(this.body);
 
-            camera.position.set(0, 2, 5);
-            camera.lookAt(this.mesh.position);
-
+            // No longer updating camera based on player position.
             this.body.addEventListener("collide", (event) => {
                 if (
                     event.body === groundBody ||
@@ -751,10 +761,6 @@ document
         player.activateCooldownReduction();
     });
 
-// ----- Camera Offset -----
-const cameraOffset = new THREE.Vector3(0, 2, 2);
-const cameraLookAtOffset = new THREE.Vector3(0, 1, 0);
-
 // ----- Create Initial Platforms -----
 createPlatforms(totalCubes);
 
@@ -994,10 +1000,8 @@ function animate() {
 
     updateTargetIndicator();
 
-    if (player.mesh) {
-        camera.position.copy(player.mesh.position).add(cameraOffset);
-        camera.lookAt(player.mesh.position.clone().add(cameraLookAtOffset));
-    }
+    // OrbitControls handle camera movement; no need to update camera based on player.
+    orbitControls.update();
     renderer.render(scene, camera);
 }
 
