@@ -117,19 +117,6 @@ class Player {
         this.isAlive = true;
         this.isGrounded = false;
 
-        // this.geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        // this.material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        // this.mesh = new THREE.Mesh(this.geometry, this.material);
-        // scene.add(this.mesh);
-        // this.body = new CANNON.Body({
-        //     mass: 1,
-        //     linearDamping: 0.9,
-        //     angularDamping: 1,
-        // });
-        // this.body.addShape(new CANNON.Box(new CANNON.Vec3(0.25, 0.25, 0.25)));
-        // this.body.position.set(0, 2.5, 0);
-        // world.addBody(this.body);
-
         // Initialize GLTFLoader
         const loader = new GLTFLoader();
         loader.load("wizard.glb", (gltf) => {
@@ -206,11 +193,22 @@ class Player {
             return;
         }
         const targetVelocity = new CANNON.Vec3(0, 0, 0);
-        if (keys["ArrowUp"]) targetVelocity.z = -this.speed;
-        if (keys["ArrowDown"]) targetVelocity.z = this.speed;
-        if (keys["ArrowLeft"]) targetVelocity.x = -this.speed;
-        if (keys["ArrowRight"]) targetVelocity.x = this.speed;
+        // player is now automated for movement and enemy targeting 
+        // if (keys["ArrowUp"]) targetVelocity.z = -this.speed;
+        // if (keys["ArrowDown"]) targetVelocity.z = this.speed;
+        // if (keys["ArrowLeft"]) targetVelocity.x = -this.speed;
+        // if (keys["ArrowRight"]) targetVelocity.x = this.speed;
+        // if (e.code === "Space" && player.isGrounded) {
+        //     player.body.velocity.y = 8; // Player jump.
+        //     player.isGrounded = false;
+        // }
+        // if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
+        //     player.shoot();
+        // }
+
         if (keys["KeyH"]) this.activateHealthRegen();
+        if (keys["KeyC"]) this.activateCooldownReduction();
+
         if (targetVelocity.x !== 0 || targetVelocity.z !== 0) {
             const direction = new THREE.Vector3(
                 targetVelocity.x,
@@ -727,16 +725,6 @@ const keys = {};
 
 window.addEventListener("keydown", (e) => {
     keys[e.code] = true;
-    if (e.code === "Space" && player.isGrounded) {
-        player.body.velocity.y = 8; // Player jump.
-        player.isGrounded = false;
-    }
-    if (e.code === "ShiftRight" || e.code === "ShiftLeft") {
-        player.shoot();
-    }
-    if (e.code === "KeyC") {
-        player.activateCooldownReduction();
-    }
 });
 
 window.addEventListener("keyup", (e) => {
