@@ -489,8 +489,6 @@ class Enemy {
 
         // ----- Target Selection & Switching -----
         if (collectibleCubes.length > 0) {
-            console.log(collectibleCubes)
-            console.log(" I like to move it move it ")
             let candidate = null;
             let minDistance = Infinity;
             for (const cubeObj of collectibleCubes) {
@@ -505,7 +503,6 @@ class Enemy {
             this.jumpAttemptsForTarget = 0;
         } else {
             if (!this.currentTarget || this.currentTarget.mesh !== this.player.mesh) {
-                console.log("TAGRGETING PLAYER !!!!!!!!!!");
                 this.currentTarget = { mesh: this.player.mesh };
             }
         }
@@ -514,9 +511,8 @@ class Enemy {
         const MIN_DISTANCE_TO_PLAYER = 2;
         if (this.currentTarget) {
             const targetPos = this.currentTarget.mesh.position;
-            console.log("target position = " + targetPos.x)
             if (this.currentTarget.mesh === this.player.mesh) {
-                console.log("my targetis the player!!!!!");
+
                 const distanceToPlayer = this.mesh.position.distanceTo(targetPos);
                 if (distanceToPlayer < MIN_DISTANCE_TO_PLAYER) {
                     const directionAway = this.mesh.position.clone().sub(targetPos).normalize();
