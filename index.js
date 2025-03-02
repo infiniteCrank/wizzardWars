@@ -116,7 +116,6 @@ class Player {
         this.shootCooldown = 1000;
         this.lastShotTime = 0;
         this.cubeCount = 0;
-        this.speed = 5;
         this.scene = scene;
         this.world = world;
         this.isAlive = true;
@@ -124,7 +123,7 @@ class Player {
         // currentTarget: object with { mesh, (optionally body), type }
         // type: "collectible", "platform", or "enemy"
         this.currentTarget = null;
-        this.movementSpeed = 1;
+        this.movementSpeed = 2;
         this.jumpAttemptsForTarget = 0;
 
         const loader = new GLTFLoader();
