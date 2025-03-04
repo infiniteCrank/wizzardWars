@@ -151,6 +151,14 @@ class Player {
             });
         });
     }
+    enableShooting() {
+        if (this.spendCubes(10)) {
+            this.shootingEnabled = true;
+            console.log("Player shooting enabled!");
+        } else {
+            console.log("Not enough cubes to activate shooting!");
+        }
+    }
     computeSteering(targetPos) {
         const desired = new THREE.Vector3()
             .subVectors(targetPos, this.mesh.position)
@@ -172,10 +180,9 @@ class Player {
         return steering.normalize().multiplyScalar(this.movementSpeed);
     }
     shoot() {
-        if (!this.isAlive || Date.now() - this.lastShotTime < this.shootCooldown) return;
+        if (!this.isAlive || !this.shootingEnabled || Date.now() - this.lastShotTime < this.shootCooldown) return;
 
-        const direction = new THREE.Vector3(0, 0, -1);
-        direction.applyQuaternion(this.mesh.quaternion);
+        const direction = enemy.mesh.position.clone().sub(this.mesh.position).normalize();
 
         const newProjectile = new Projectile(
             this.mesh.position.clone().add(direction.multiplyScalar(0.5)),
@@ -252,6 +259,7 @@ class Player {
         // ---- Manual Input Processing ----
         if (keys["KeyH"]) this.activateHealthRegen();
         if (keys["KeyC"]) this.activateCooldownReduction();
+        if (keys["KeyG"]) this.enableShooting();
 
         this.projectiles.forEach((projectile) => projectile.update());
         this.projectiles = this.projectiles.filter(
@@ -369,6 +377,12 @@ class Enemy {
         this.jumpAttemptsForTarget = 0;
         this.updateHealthBar();
     }
+    enableShooting() {
+        if (this.spendCubes(10)) {
+            this.shootingEnabled = true;
+            console.log("Enemy shooting enabled!");
+        }
+    }
     takeDamage(amount) {
         if (!this.isAlive) return;
         this.health -= amount;
@@ -417,7 +431,7 @@ class Enemy {
         return steering.normalize().multiplyScalar(this.movementSpeed);
     }
     shoot() {
-        if (!this.isAlive) return;
+        if (!this.isAlive || !this.shootingEnabled) return;
         const direction = new THREE.Vector3()
             .subVectors(this.player.mesh.position, this.mesh.position)
             .normalize();
@@ -476,6 +490,10 @@ class Enemy {
     update() {
         if (!this.isAlive) return;
 
+        if (!this.shootingEnabled && this.cubeCount >= 10) {
+            this.enableShooting();
+        }
+
         if (this.health < 0.2 * this.maxHealth && this.cubeCount >= 10) {
             this.activateHealthRegen();
         }
@@ -497,7 +515,6 @@ class Enemy {
                     candidate = cubeObj;
                 }
             }
-            console.log(candidate)
             this.currentTarget = candidate;
             this.jumpAttemptsForTarget = 0;
         } else {
@@ -752,6 +769,11 @@ document
     .getElementById("coolDownButton")
     .addEventListener("click", () => {
         player.activateCooldownReduction();
+    });
+document
+    .getElementById("enableGun")
+    .addEventListener("click", () => {
+        player.enableShooting();
     });
 
 // ----- Countdown Setup -----
