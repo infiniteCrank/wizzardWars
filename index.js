@@ -112,9 +112,7 @@ class Player {
         this.health = 100;
         this.maxHealth = 100;
         this.kills = 0;
-        this.projectiles = [];
-        this.shootCooldown = 1000;
-        this.lastShotTime = 0;
+
         this.cubeCount = 0;
         this.scene = scene;
         this.world = world;
@@ -125,6 +123,10 @@ class Player {
         this.currentTarget = null;
         this.movementSpeed = 2;
         this.jumpAttemptsForTarget = 0;
+
+        this.lastProjectileTime = 0; // Last time a projectile was fired
+        this.projectileCooldown = 1.5; // Time in seconds between shots
+        this.projectiles = []; // Array to store active projectiles
 
         const loader = new GLTFLoader();
         loader.load("wizard.glb", (gltf) => {
@@ -151,6 +153,44 @@ class Player {
             });
         });
     }
+    // Check if projectiles should be unlocked
+    checkProjectileUnlock() {
+        if (this.cubeCount >= 10 && !this.projectileUnlocked) {
+            console.log("Projectiles Unlocked!");
+            this.projectileUnlocked = true;
+        }
+    }
+    // Fire a projectile at the enemy
+    fireProjectile() {
+        if (!this.projectileUnlocked) return; // Ensure projectiles are unlocked
+
+        const now = performance.now() / 1000;
+        if (now - this.lastProjectileTime < this.projectileCooldown) return; // Enforce cooldown
+
+        this.lastProjectileTime = now;
+
+        // Create the projectile
+        const projectileGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+        const projectileMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const projectileMesh = new THREE.Mesh(projectileGeometry, projectileMaterial);
+        scene.add(projectileMesh);
+
+        // Set initial position at the player's current position
+        projectileMesh.position.copy(this.body.position);
+
+        // Compute direction toward enemy
+        const direction = new THREE.Vector3().subVectors(enemy.mesh.position, this.body.position).normalize();
+        const speed = 7; // Speed of projectile
+
+        // Store the projectile and its velocity
+        this.projectiles.push({
+            mesh: projectileMesh,
+            velocity: direction.multiplyScalar(speed),
+        });
+
+        console.log("Firing projectile!");
+    }
+
     enableShooting() {
         if (this.spendCubes(10)) {
             this.shootingEnabled = true;
@@ -179,22 +219,6 @@ class Player {
         const steering = desired.add(avoidance);
         return steering.normalize().multiplyScalar(this.movementSpeed);
     }
-    shoot() {
-        if (!this.isAlive || !this.shootingEnabled || Date.now() - this.lastShotTime < this.shootCooldown) return;
-
-        const direction = enemy.mesh.position.clone().sub(this.mesh.position).normalize();
-
-        const newProjectile = new Projectile(
-            this.mesh.position.clone().add(direction.multiplyScalar(0.5)),
-            direction,
-            PROJECTILE_SPEED,
-            PROJECTILE_LIFETIME
-        );
-
-        this.projectiles.push(newProjectile);
-        this.scene.add(newProjectile.mesh);
-        this.lastShotTime = Date.now();
-    }
     respawn() {
         this.health = this.maxHealth;
         this.isAlive = true;
@@ -213,6 +237,32 @@ class Player {
         if (!this.mesh) return;
         this.mesh.position.copy(this.body.position);
         this.mesh.quaternion.copy(this.body.quaternion);
+
+        // Check if projectiles should be unlocked
+        this.checkProjectileUnlock();
+
+        // Auto-fire projectiles if unlocked
+        if (this.projectileUnlocked) {
+            this.fireProjectile();
+        }
+
+        // Move and check projectile collisions
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const proj = this.projectiles[i];
+
+            // Move projectile forward
+            proj.mesh.position.add(proj.velocity.clone().multiplyScalar(1 / 60));
+
+            // Check collision with enemy
+            const enemyBox = new THREE.Box3().setFromObject(enemy.mesh);
+            const projSphere = new THREE.Sphere(proj.mesh.position, 0.15);
+
+            if (projSphere.intersectsBox(enemyBox)) {
+                enemy.takeDamage(DAMAGE_AMOUNT);
+                scene.remove(proj.mesh);
+                this.projectiles.splice(i, 1); // Remove from list
+            }
+        }
 
         // ---- Auto-Movement when a target is selected ----
         if (this.currentTarget) {
@@ -246,11 +296,6 @@ class Player {
                     this.body.velocity.x = steering.x;
                     this.body.velocity.z = steering.z;
                     this.mesh.lookAt(targetPos);
-                } else {
-                    // Shoot logic
-                    if (Date.now() - this.lastShotTime > this.shootCooldown) {
-                        this.shoot();
-                    }
                 }
             }
         }
@@ -261,10 +306,7 @@ class Player {
         if (keys["KeyC"]) this.activateCooldownReduction();
         if (keys["KeyG"]) this.enableShooting();
 
-        this.projectiles.forEach((projectile) => projectile.update());
-        this.projectiles = this.projectiles.filter(
-            (projectile) => projectile.mesh.parent !== null
-        );
+
         this.updateHealthBar();
     }
     takeDamage(amount) {
@@ -301,9 +343,6 @@ class Player {
         }
     }
     removeAllProjectiles() {
-        this.projectiles.forEach((projectile) => {
-            projectile.dispose();
-        });
         this.projectiles.length = 0;
     }
     updateHealthBar() {
@@ -901,12 +940,8 @@ function onPointerDown(event) {
     raycaster.setFromCamera(mouse, camera);
 
     const targetableObjects = [];
-    collectibleCubes.forEach(cubeObj => {
-        targetableObjects.push(cubeObj.mesh);
-    });
-    platforms.forEach(platObj => {
-        targetableObjects.push(platObj.mesh);
-    });
+    collectibleCubes.forEach(cubeObj => targetableObjects.push(cubeObj.mesh));
+    platforms.forEach(platObj => targetableObjects.push(platObj.mesh));
     targetableObjects.push(enemy.mesh);
 
     const intersects = raycaster.intersectObjects(targetableObjects, false);
@@ -914,36 +949,52 @@ function onPointerDown(event) {
     if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
 
-        // Determine the new target type
         if (clickedObject === enemy.mesh) {
             console.log("Enemy targeted!");
             player.currentTarget = { mesh: enemy.mesh, type: "enemy" };
-            player.jumpAttemptsForTarget = 0; // Reset jump attempts when targeting enemy
         } else {
             const cubeObj = collectibleCubes.find(cubeObj => cubeObj.mesh === clickedObject);
             if (cubeObj) {
                 console.log("Collectible cube targeted!");
                 player.currentTarget = { ...cubeObj, type: "collectible" };
-                player.jumpAttemptsForTarget = 0; // Reset jump attempts
             } else {
                 const platObj = platforms.find(platObj => platObj.mesh === clickedObject);
                 if (platObj) {
                     console.log("Platform targeted!");
-                    player.currentTarget = { mesh: platObj.mesh, type: "platform" };
-                    player.jumpAttemptsForTarget = 0; // Reset jump attempts
+
+                    // Check if there's a collectible on top of the platform
+                    const cubeOnPlatform = collectibleCubes.find(cubeObj => {
+                        return Math.abs(cubeObj.mesh.position.x - platObj.mesh.position.x) < 1 &&
+                            Math.abs(cubeObj.mesh.position.z - platObj.mesh.position.z) < 1 &&
+                            cubeObj.mesh.position.y > platObj.mesh.position.y;
+                    });
+
+                    if (cubeOnPlatform) {
+                        console.log("Cube on platform detected, targeting cube instead.");
+                        player.currentTarget = { ...cubeOnPlatform, type: "collectible" };
+                    } else {
+                        // Set target above the platform to avoid getting stuck
+                        const targetAbovePlatform = new THREE.Vector3(
+                            platObj.mesh.position.x,
+                            platObj.mesh.position.y + 1.5, // Raise target above platform
+                            platObj.mesh.position.z
+                        );
+                        player.currentTarget = { mesh: platObj.mesh, type: "platform", position: targetAbovePlatform };
+                    }
                 }
             }
         }
     } else {
-        player.currentTarget = null; // Clear target if nothing is clicked
+        player.currentTarget = null;
     }
 
-    // Allow the player to move towards the new target
+    // Move towards the new target
     if (player.currentTarget) {
-        const desiredPosition = player.currentTarget.mesh.position;
+        const desiredPosition = player.currentTarget.position || player.currentTarget.mesh.position;
         const steering = player.computeSteering(desiredPosition);
         player.body.velocity.x = steering.x;
         player.body.velocity.z = steering.z;
+        player.body.velocity.y = Math.max(player.body.velocity.y, 5); // Apply upward force for jumping
     }
 
     updateTargetIndicator();
