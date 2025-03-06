@@ -900,8 +900,6 @@ function onPointerDown(event) {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, camera);
 
-    // Build list of targetable objects:
-    // Include collectible cubes, platforms (to target the platform itself), and the enemy.
     const targetableObjects = [];
     collectibleCubes.forEach(cubeObj => {
         targetableObjects.push(cubeObj.mesh);
@@ -915,28 +913,39 @@ function onPointerDown(event) {
 
     if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
+
+        // Determine the new target type
         if (clickedObject === enemy.mesh) {
             console.log("Enemy targeted!");
             player.currentTarget = { mesh: enemy.mesh, type: "enemy" };
+            player.jumpAttemptsForTarget = 0; // Reset jump attempts when targeting enemy
         } else {
-            // Check if the clicked object is a collectible cube.
             const cubeObj = collectibleCubes.find(cubeObj => cubeObj.mesh === clickedObject);
             if (cubeObj) {
                 console.log("Collectible cube targeted!");
                 player.currentTarget = { ...cubeObj, type: "collectible" };
+                player.jumpAttemptsForTarget = 0; // Reset jump attempts
             } else {
-                // Otherwise, if it's a platform, target the platform.
                 const platObj = platforms.find(platObj => platObj.mesh === clickedObject);
                 if (platObj) {
                     console.log("Platform targeted!");
                     player.currentTarget = { mesh: platObj.mesh, type: "platform" };
+                    player.jumpAttemptsForTarget = 0; // Reset jump attempts
                 }
             }
         }
     } else {
-        // If nothing is clicked, clear the target.
-        player.currentTarget = null;
+        player.currentTarget = null; // Clear target if nothing is clicked
     }
+
+    // Allow the player to move towards the new target
+    if (player.currentTarget) {
+        const desiredPosition = player.currentTarget.mesh.position;
+        const steering = player.computeSteering(desiredPosition);
+        player.body.velocity.x = steering.x;
+        player.body.velocity.z = steering.z;
+    }
+
     updateTargetIndicator();
 }
 
