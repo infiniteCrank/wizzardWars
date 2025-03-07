@@ -387,7 +387,7 @@ class Enemy {
         this.cubeCount = 0;
         this.kills = 0;
         this.projectiles = [];
-        this.movementSpeed = 1;
+        this.movementSpeed = 2;
         this.isAlive = true;
         this.shootCooldown = 1000;
         this.lastShotTime = 0;
