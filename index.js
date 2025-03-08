@@ -124,6 +124,7 @@ class Player {
         this.movementSpeed = 2;
         this.jumpAttemptsForTarget = 0;
 
+        this.projectileUnlocked = false;
         this.lastProjectileTime = 0; // Last time a projectile was fired
         this.projectileCooldown = 1.5; // Time in seconds between shots
         this.projectiles = []; // Array to store active projectiles
@@ -258,6 +259,8 @@ class Player {
             const projSphere = new THREE.Sphere(proj.mesh.position, 0.15);
 
             if (projSphere.intersectsBox(enemyBox)) {
+                // Create explosion effect when hitting enemy
+                createParticleEffect(enemy.mesh.position, 0xff0000); // Red explosion effect
                 enemy.takeDamage(DAMAGE_AMOUNT);
                 scene.remove(proj.mesh);
                 this.projectiles.splice(i, 1); // Remove from list
@@ -334,6 +337,10 @@ class Player {
         if (this.spendCubes(10)) {
             this.shootCooldown /= 2;
             console.log("Projectile cooldown reduced!");
+
+            // Trigger particle effect at player's position
+            createParticleEffect(this.body.position, 0x00ff00); // Green particles for cooldown reduction
+
             setTimeout(() => {
                 this.shootCooldown *= 2;
                 console.log("Projectile cooldown restored!");
@@ -387,7 +394,7 @@ class Enemy {
         this.cubeCount = 0;
         this.kills = 0;
         this.projectiles = [];
-        this.movementSpeed = 2;
+        this.movementSpeed = 1;
         this.isAlive = true;
         this.shootCooldown = 1000;
         this.lastShotTime = 0;
@@ -480,7 +487,7 @@ class Enemy {
             ENEMY_PROJECTILE_SPEED,
             ENEMY_PROJECTILE_LIFETIME
         );
-        enemyProjectile.material.color.set(0xff0000);
+        enemyProjectile.material.color.set(0x00ff00);
         this.projectiles.push(enemyProjectile);
         this.scene.add(enemyProjectile.mesh);
         this.lastShotTime = Date.now();
@@ -785,6 +792,56 @@ function resetPlatformsAndCubes() {
     console.log("Platforms and cubes have been reset.");
 }
 
+// ----- Particle effects -----
+function createParticleEffect(position, color) {
+    const particleCount = 20;
+    const particles = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+        positions[i * 3] = position.x + (Math.random() - 0.5) * 0.5;
+        positions[i * 3 + 1] = position.y + (Math.random() - 0.5) * 0.5;
+        positions[i * 3 + 2] = position.z + (Math.random() - 0.5) * 0.5;
+    }
+
+    particles.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+    const particleMaterial = new THREE.PointsMaterial({
+        color: color,
+        size: 0.1,
+        transparent: true,
+        opacity: 0.8,
+    });
+
+    const particleSystem = new THREE.Points(particles, particleMaterial);
+    scene.add(particleSystem);
+
+    // Animate particles and remove after a short delay
+    const duration = 0.5; // Effect lasts 0.5s
+    let elapsedTime = 0;
+
+    function animateParticles() {
+        elapsedTime += 1 / 60;
+
+        if (elapsedTime > duration) {
+            scene.remove(particleSystem);
+            particles.dispose();
+            particleMaterial.dispose();
+            return;
+        }
+
+        const positionsArray = particles.attributes.position.array;
+        for (let i = 0; i < particleCount; i++) {
+            positionsArray[i * 3 + 1] += 0.02; // Move particles upwards slightly
+        }
+        particles.attributes.position.needsUpdate = true;
+
+        requestAnimationFrame(animateParticles);
+    }
+
+    animateParticles();
+}
+
 // ----- Instantiate Player & Enemy -----
 const player = new Player(scene, world);
 const enemy = new Enemy(scene, world, player);
@@ -854,7 +911,12 @@ const countdownInterval = setInterval(() => {
         countdownActive = false;
         // Reset platforms and cubes when countdown finishes.
         resetPlatformsAndCubes();
-        player.respawn();
+        if (!enemy.isAlive) {
+            enemy.respawn();
+        }
+        if (!player.isAlive) {
+            player.respawn();
+        }
     } else {
         updateCountdown();
     }
@@ -1066,7 +1128,6 @@ function animate() {
             const projSphere = new THREE.Sphere(proj.mesh.position, 0.15);
             if (projSphere.intersectsBox(enemyBox)) {
                 enemy.takeDamage(DAMAGE_AMOUNT);
-                proj.dispose();
                 player.projectiles.splice(i, 1);
             }
         }
