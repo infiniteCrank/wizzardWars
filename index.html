@@ -5,7 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Wizzard Wars</title>
     <style>
-        body { margin: 0; overflow: hidden; }
+        
+        body, html {
+            margin: 0;
+            overflow: hidden; /* Prevents scrollbars */
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -31,7 +40,6 @@
     
     <button id="healthRegenButton">Spend 10 Cubes for Health Regen (H)</button>
     <button id="coolDownButton">Spend 10 Cubes for CD reduction (C)</button>
-    <button id="enableGun">Spend 10 Cubes for gun (G)</button>
   <!-- Three.js CDN -->
   <script type="importmap">
     {

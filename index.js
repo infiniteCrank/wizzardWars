@@ -157,6 +157,8 @@ class Player {
     // Check if projectiles should be unlocked
     checkProjectileUnlock() {
         if (this.cubeCount >= 10 && !this.projectileUnlocked) {
+            this.cubeCount -= 10;
+            this.updateCubeCount();
             console.log("Projectiles Unlocked!");
             this.projectileUnlocked = true;
         }
@@ -190,15 +192,6 @@ class Player {
         });
 
         console.log("Firing projectile!");
-    }
-
-    enableShooting() {
-        if (this.spendCubes(10)) {
-            this.shootingEnabled = true;
-            console.log("Player shooting enabled!");
-        } else {
-            console.log("Not enough cubes to activate shooting!");
-        }
     }
     computeSteering(targetPos) {
         const desired = new THREE.Vector3()
@@ -307,7 +300,6 @@ class Player {
         // ---- Manual Input Processing ----
         if (keys["KeyH"]) this.activateHealthRegen();
         if (keys["KeyC"]) this.activateCooldownReduction();
-        if (keys["KeyG"]) this.enableShooting();
 
 
         this.updateHealthBar();
@@ -323,7 +315,7 @@ class Player {
             this.world.removeBody(this.body);
             this.removeAllProjectiles();
             enemy.kills++;
-            document.getElementById("enemy-kills").innerText = "Enemy Kills: " + enemy.kills;
+            this.updateKillsBar();
             if (enemy.kills >= 3) {
                 displayWinner("Enemy wins!");
                 return;
@@ -333,13 +325,13 @@ class Player {
             this.updateHealthBar();
         }
     }
+    updateKillsBar() {
+        document.getElementById("enemy-kills").innerText = "Enemy Kills: " + enemy.kills;
+    }
     activateCooldownReduction() {
         if (this.spendCubes(10)) {
             this.shootCooldown /= 2;
             console.log("Projectile cooldown reduced!");
-
-            // Trigger particle effect at player's position
-            createParticleEffect(this.body.position, 0x00ff00); // Green particles for cooldown reduction
 
             setTimeout(() => {
                 this.shootCooldown *= 2;
@@ -361,14 +353,19 @@ class Player {
                 healthPercentage < 30 ? "red" : "green";
         }
     }
+    updateCubeCount() {
+        const cubeDisplay = document.getElementById("player-cubes");
+        if (cubeDisplay) {
+            cubeDisplay.innerText = "Player Cubes: " + this.cubeCount;
+        }
+    }
     activateHealthRegen() {
+        if (!this.isAlive) {
+            return
+        }
         if (this.spendCubes(10)) {
             this.health = Math.min(this.health + this.maxHealth / 2, this.maxHealth);
             this.updateHealthBar();
-            const cubeDisplay = document.getElementById("player-cubes");
-            if (cubeDisplay) {
-                cubeDisplay.innerText = "Player Cubes: " + this.cubeCount;
-            }
             console.log("Health Regenerated!");
         } else {
             console.log("Not enough cubes to activate Health Regeneration!");
@@ -377,6 +374,7 @@ class Player {
     spendCubes(amount) {
         if (this.cubeCount >= amount) {
             this.cubeCount -= amount;
+            this.updateCubeCount();
             return true;
         }
         return false;
@@ -440,7 +438,7 @@ class Enemy {
             this.world.removeBody(this.body);
             this.removeAllProjectiles();
             player.kills++;
-            document.getElementById("player-kills").innerText = "Player Kills: " + player.kills;
+            this.updateKillsBar();
             if (player.kills >= 3) {
                 displayWinner("Player Wins!");
                 return;
@@ -450,6 +448,9 @@ class Enemy {
             this.updateHealthBar();
         }
     }
+    updateKillsBar() {
+        document.getElementById("player-kills").innerText = "Player Kills: " + player.kills;
+    }
     updateHealthBar() {
         const enemyHealthBar = document.getElementById("enemy-health-bar");
         if (enemyHealthBar && this.health > 0) {
@@ -457,6 +458,12 @@ class Enemy {
             enemyHealthBar.style.width = healthPercentage + "%";
             enemyHealthBar.style.background =
                 healthPercentage < 30 ? "red" : "green";
+        }
+    }
+    updateCubeCount() {
+        const cubeDisplay = document.getElementById("enemy-cubes");
+        if (cubeDisplay) {
+            cubeDisplay.innerText = "Enemy Cubes: " + this.cubeCount;
         }
     }
     computeSteering(targetPos) {
@@ -866,12 +873,20 @@ document
     .addEventListener("click", () => {
         player.activateCooldownReduction();
     });
-document
-    .getElementById("enableGun")
-    .addEventListener("click", () => {
-        player.enableShooting();
-    });
 
+window.addEventListener("resize", onWindowResize, false);
+
+function onWindowResize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    // Update camera aspect ratio
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+
+    // Update renderer size
+    renderer.setSize(width, height);
+}
 // ----- Countdown Setup -----
 let countdownTime = 3;
 let countdownActive = true;
@@ -911,12 +926,6 @@ const countdownInterval = setInterval(() => {
         countdownActive = false;
         // Reset platforms and cubes when countdown finishes.
         resetPlatformsAndCubes();
-        if (!enemy.isAlive) {
-            enemy.respawn();
-        }
-        if (!player.isAlive) {
-            player.respawn();
-        }
     } else {
         updateCountdown();
     }
@@ -939,6 +948,64 @@ function startCountdown() {
             updateCountdown();
         }
     }, 1000);
+}
+
+function resetGame() {
+    resetPlatformsAndCubes();
+    startCountdown();
+    // Reset platforms and cubes when countdown finishes.
+    resetPlatformsAndCubes();
+    if (!enemy.isAlive) {
+        enemy.respawn();
+    }
+    if (!player.isAlive) {
+        player.respawn();
+    }
+
+    console.log("Game resetting...");
+
+    // Reset player stats
+    player.health = player.maxHealth;
+    player.cubeCount = 0;
+    player.kills = 0;
+    player.currentTarget = null;
+    player.jumpAttemptsForTarget = 0;
+    player.projectiles = [];
+    player.projectileUnlocked = false;
+    player.body.velocity.set(0, 0, 0);
+    player.updateHealthBar();
+    player.updateCubeCount();
+    player.updateKillsBar();
+
+    // Reset enemy stats
+    enemy.health = enemy.maxHealth;
+    enemy.kills = 0;
+    enemy.cubeCount = 0;
+    enemy.shootingEnabled = false;
+    enemy.body.velocity.set(0, 0, 0);
+    enemy.updateHealthBar();
+    enemy.updateCubeCount();
+    enemy.updateKillsBar();
+
+    // Remove projectiles from the scene
+    player.projectiles.forEach(proj => {
+        scene.remove(proj.mesh);
+        proj.dispose();
+    });
+    player.projectiles = [];
+
+    // Remove the target indicator
+    if (targetIndicator) {
+        scene.remove(targetIndicator);
+        targetIndicator.geometry.dispose();
+        targetIndicator.material.dispose();
+        targetIndicator = null;
+    }
+
+    // Reset the countdown or any game state flags
+    countdownActive = false;
+
+    console.log("Game reset complete!");
 }
 
 // ----- Winner Screen -----
@@ -976,16 +1043,6 @@ function displayWinner(winnerText) {
     }, 5000);
 }
 
-function resetGame() {
-    player.kills = 0;
-    enemy.kills = 0;
-    player.health = player.maxHealth;
-    enemy.health = enemy.maxHealth;
-    player.isAlive = true;
-    enemy.isAlive = true;
-    resetPlatformsAndCubes();
-    startCountdown();
-}
 
 // ----- Targeting via Pointer Events & Visual Cue -----
 // Global variable for the visual cue (a yellow ring)
