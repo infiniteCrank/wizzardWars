@@ -10,7 +10,7 @@ const camera = new THREE.PerspectiveCamera(
     1000
 );
 // Set the camera position to view the whole scene (adjusted closer)
-camera.position.set(4, 4, 4);
+camera.position.set(4, 4, 0);
 
 // ----- Renderer & OrbitControls -----
 const renderer = new THREE.WebGLRenderer();
@@ -136,7 +136,7 @@ class Player {
             scene.add(this.mesh);
 
             this.body = new CANNON.Body({
-                mass: 1,
+                mass: 2,
                 linearDamping: 0.9,
                 angularDamping: 1,
             });
@@ -281,6 +281,7 @@ class Player {
                     if (this.mesh.position.distanceTo(targetPos) < 0.5) {
                         // Collect or confirm reach.
                         // Collect or move logic here.
+                        this.currentTarget = "";
                     }
                 }
             } else if (this.currentTarget.type === "enemy") {
@@ -887,6 +888,9 @@ function onWindowResize() {
     // Update renderer size
     renderer.setSize(width, height);
 }
+
+
+
 // ----- Countdown Setup -----
 let countdownTime = 3;
 let countdownActive = true;
@@ -942,7 +946,6 @@ function startCountdown() {
             clearInterval(countdownInterval);
             scene.remove(countdownSprite);
             countdownActive = false;
-            resetPlatformsAndCubes();
             player.respawn();
         } else {
             updateCountdown();
